@@ -133,6 +133,10 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
 .dot-income{background:var(--green-light)}.dot-expense{background:var(--red)}.dot-internal{background:var(--border2)}
 .cat-select-inline{background:transparent;border:1.5px solid var(--border);color:var(--text2);font-family:'Outfit',sans-serif;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;cursor:pointer;outline:none;max-width:170px}
 .cat-select-inline:hover,.cat-select-inline:focus{border-color:var(--accent);color:var(--accent)}
+/* Category badge wrapper — overlays a hidden select on top of the styled badge */
+.cat-badge-wrap{position:relative;display:inline-block;cursor:pointer}
+.cat-badge-wrap select{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;font-size:12px}
+.cat-badge-wrap:hover .cat-badge-inner{filter:brightness(.92);outline:2px solid var(--accent);outline-offset:1px}
 .amount-cell{font-family:'JetBrains Mono',monospace;font-weight:600;text-align:right;white-space:nowrap}
 .section-group-header td{background:var(--surface2)!important;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);padding:8px 16px!important}
 .unknown-flag{color:var(--amber);font-size:12px;margin-right:4px}
@@ -644,7 +648,7 @@ function renderIncomeSources(){
   }
   el.innerHTML=txs.map(t=>{
     const isUnknown=t.category==='Unknown';
-    const catBadge=isUnknown?'<span class="badge badge-amber">&#9888; Unknown</span>':'<span class="badge badge-blue">'+t.category+'</span>';
+    const catBadge=catBadgeHTML(t.category);
     return '<tr>'+
       '<td class="mono text-muted" style="font-size:12px">'+t.date+'</td>'+
       '<td class="fw6">'+t.desc+'</td>'+
@@ -1042,6 +1046,36 @@ const BASE_TX = [
 
 const DEFAULT_CATS=['Salary','Claims','Food','Insurance','Tax','Hobbies - Pokemon','Transport','Utilities','Internet','Handphone','Subscriptions','Gift Received','Internal Transfer','Unknown'];
 const CAT_COLORS={'Salary':'#049a74','Claims':'#0096c7','Food':'#f9a825','Insurance':'#4361ee','Tax':'#7209b7','Hobbies - Pokemon':'#f3722c','Transport':'#06b6d4','Utilities':'#ec4899','Internet':'#0ea5e9','Handphone':'#84cc16','Subscriptions':'#ef233c','Gift Received':'#a855f7','Internal Transfer':'#94a3b8','Unknown':'#cbd5e1'};
+
+// Category visual config: icon + bg + text (light) + text (dark)
+const CAT_STYLE={
+  'Salary':         {icon:'💼', bg:'#dcfce7', col:'#15803d', darkBg:'#052e16', darkCol:'#4ade80'},
+  'Claims':         {icon:'📋', bg:'#dbeafe', col:'#1d4ed8', darkBg:'#0c1a3d', darkCol:'#60a5fa'},
+  'Food':           {icon:'🍜', bg:'#fef9c3', col:'#a16207', darkBg:'#2d1f00', darkCol:'#fbbf24'},
+  'Insurance':      {icon:'🛡️', bg:'#ede9fe', col:'#6d28d9', darkBg:'#1e0a3d', darkCol:'#a78bfa'},
+  'Tax':            {icon:'🏛',  bg:'#f3e8ff', col:'#7e22ce', darkBg:'#1a0630', darkCol:'#c084fc'},
+  'Hobbies - Pokemon':{icon:'🃏', bg:'#ffedd5', col:'#c2410c', darkBg:'#2d1000', darkCol:'#fb923c'},
+  'Transport':      {icon:'🚌', bg:'#cffafe', col:'#0e7490', darkBg:'#001f26', darkCol:'#22d3ee'},
+  'Utilities':      {icon:'💡', bg:'#fce7f3', col:'#be185d', darkBg:'#2d0020', darkCol:'#f472b6'},
+  'Internet':       {icon:'📶', bg:'#e0f2fe', col:'#0369a1', darkBg:'#001a2e', darkCol:'#38bdf8'},
+  'Handphone':      {icon:'📱', bg:'#ecfccb', col:'#3f6212', darkBg:'#0f1f00', darkCol:'#a3e635'},
+  'Subscriptions':  {icon:'📺', bg:'#ffe4e6', col:'#be123c', darkBg:'#2d0010', darkCol:'#fb7185'},
+  'Gift Received':  {icon:'🎁', bg:'#f5d0fe', col:'#86198f', darkBg:'#2a0030', darkCol:'#e879f9'},
+  'Internal Transfer':{icon:'🔁', bg:'#f1f5f9', col:'#475569', darkBg:'#1e293b', darkCol:'#94a3b8'},
+  'Unknown':        {icon:'❓', bg:'#fef3c7', col:'#92400e', darkBg:'#1c0f00', darkCol:'#fcd34d'},
+};
+function getCatStyle(cat){
+  return CAT_STYLE[cat]||{icon:'📌', bg:'#f1f5f9', col:'#334155', darkBg:'#1e293b', darkCol:'#94a3b8'};
+}
+function catBadgeHTML(cat){
+  const s=getCatStyle(cat);
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  const bg=dark?s.darkBg:s.bg;
+  const col=dark?s.darkCol:s.col;
+  return '<span style="display:inline-flex;align-items:center;gap:4px;background:'+bg+';color:'+col+
+    ';font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;white-space:nowrap">'+
+    s.icon+' '+cat+'</span>';
+}
 const DEBIT_LABELS={'cpf-oa':'CPF OA','cpf-sa':'CPF SA','cpf-ma':'CPF MA','bank-dbs':'DBS','bank-uob':'UOB','bank-ocbc':'OCBC','':(a=>a||'—')};
 
 // ── STORAGE ───────────────────────────────────────────────────────────────────
@@ -1240,7 +1274,13 @@ function buildCatBreakdown(total){
   const map={};TRANSACTIONS.filter(t=>t.type==='expense').forEach(t=>{map[t.category]=(map[t.category]||0)+t.amount;});
   getEl('cat-breakdown').innerHTML=Object.entries(map).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>{
     const pct=total>0?(amt/total*100).toFixed(0):0,col=CAT_COLORS[cat]||'#94a3b8';
-    return '<div class="cat-row"><div class="cat-dot" style="background:'+col+'"></div><div class="cat-name">'+cat+'</div><div class="cat-bar-wrap"><div class="cat-bar" style="width:'+pct+'%;background:'+col+'"></div></div><div class="cat-amount">$'+fmt(amt)+'</div></div>';
+    const icon=(CAT_STYLE[cat]||{}).icon||'';
+    return '<div class="cat-row">'+
+      '<div class="cat-dot" style="background:'+col+'"></div>'+
+      '<div class="cat-name">'+icon+' '+cat+'</div>'+
+      '<div class="cat-bar-wrap"><div class="cat-bar" style="width:'+pct+'%;background:'+col+'"></div></div>'+
+      '<div class="cat-amount">$'+fmt(amt)+'</div>'+
+    '</div>';
   }).join('');
 }
 
@@ -1946,11 +1986,27 @@ function filterTx(){
   const tl={income:'Income',expense:'Expenses',internal:'Internal Transfers'};
   filtered.forEach(tx=>{
     if(tx.type!==lastType){html+='<tr class="section-group-header"><td colspan="5">'+tl[tx.type]+'</td></tr>';lastType=tx.type;}
-    const ac=tx.type==='income'?'text-green':tx.type==='internal'?'text-muted':'text-red';
     const sg=tx.type==='income'?'+':tx.type==='internal'?'':'-';
     const dc='dot-'+(tx.type==='income'?'income':tx.type==='internal'?'internal':'expense');
     const uf=tx.category==='Unknown'?'<span class="unknown-flag">⚠</span>':'';
-    html+='<tr><td class="mono text-muted" style="font-size:12px">'+tx.date+'</td><td><span class="type-dot '+dc+'"></span>'+uf+tx.desc+'</td><td class="text-muted" style="font-size:12px">'+tx.source+'</td><td class="amount-cell '+ac+'">'+sg+'$'+fmt(tx.amount)+'</td><td><select class="cat-select-inline" data-id="'+tx.id+'" onchange="changeCat(this)">'+buildCatOpts(tx.category)+'</select></td></tr>';
+    // Amount: bright green/red that works in both light and dark mode
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    const amtColor=tx.type==='income'
+      ?(isDark?'#34d399':'#059669')
+      :tx.type==='internal'
+        ?'var(--text3)'
+        :(isDark?'#f87171':'#dc2626');
+    // Category badge with icon and colour
+    const badge=catBadgeHTML(tx.category);
+    const catWrap='<div class="cat-badge-wrap"><span class="cat-badge-inner">'+badge+'</span>'+
+      '<select data-id="'+tx.id+'" onchange="changeCat(this)">'+buildCatOpts(tx.category)+'</select></div>';
+    html+='<tr>'+
+      '<td class="mono text-muted" style="font-size:12px">'+tx.date+'</td>'+
+      '<td><span class="type-dot '+dc+'"></span>'+uf+'<span style="font-weight:600">'+tx.desc+'</span></td>'+
+      '<td class="text-muted" style="font-size:12px">'+tx.source+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+amtColor+'">'+sg+'$'+fmt(tx.amount)+'</td>'+
+      '<td>'+catWrap+'</td>'+
+    '</tr>';
   });
   body.innerHTML=html;
 }
