@@ -250,20 +250,35 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
     <div class="card-body"><div class="budget-grid" id="budget-grid"></div></div>
   </div>
   <div class="card mb24">
-    <div class="card-header"><div class="card-title">P&amp;L History</div></div>
-    <div class="card-body" style="padding:0"><table class="tbl"><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Net Flow</th><th>Savings Rate</th><th>Status</th></tr></thead><tbody id="pnl-history"></tbody></table></div>
+    <div class="card-header">
+      <div><div class="card-title">P&amp;L History</div><div class="card-subtitle">3-month rolling view</div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select class="select-ctrl" id="pnl-end-month" onchange="renderPnLHistory()" style="font-size:12px;padding:6px 10px">
+          <option value="3-2026">Mar 2026</option>
+          <option value="2-2026">Feb 2026</option>
+          <option value="1-2026">Jan 2026</option>
+          <option value="12-2025">Dec 2025</option>
+        </select>
+        <span style="font-size:12px;color:var(--text3)">ending month</span>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <table class="tbl"><thead><tr><th>Month</th><th>Income</th><th>Expenses</th><th>Net Flow</th><th>Savings Rate</th><th>Status</th></tr></thead>
+      <tbody id="pnl-history"></tbody></table>
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid var(--border)"><p class="section-note" id="pnl-note"></p></div>
   </div>
   <div class="card">
-    <div class="card-header"><div class="card-title">Income Sources</div></div>
+    <div class="card-header">
+      <div><div class="card-title">Income Sources</div><div class="card-subtitle" id="income-sources-subtitle">All income transactions</div></div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600">Show untagged only</span>
+        <button class="toggle-sm" id="income-untagged-toggle" onclick="toggleIncomeFilter()"></button>
+      </div>
+    </div>
     <div class="card-body" style="padding:0">
-      <table class="tbl"><thead><tr><th>Source</th><th>Type</th><th>Amount</th><th>Notes</th></tr></thead>
-      <tbody>
-        <tr><td class="fw6">SHA2 Labs Pte Ltd</td><td><span class="badge badge-blue">Salary</span></td><td class="mono text-green fw6">+$3,000.00</td><td class="text-muted">Mar salary (normal $4,000)</td></tr>
-        <tr><td class="fw6">FAST Transfer x2</td><td><span class="badge badge-amber">Unknown</span></td><td class="mono text-green fw6">+$1,151.38</td><td class="text-muted">&#9888; Tag in Transactions</td></tr>
-        <tr><td class="fw6">PayNow from Sally</td><td><span class="badge badge-blue">Gift / Reimb.</span></td><td class="mono text-green fw6">+$1,068.00</td><td class="text-muted">Gift $400 + travel $668</td></tr>
-        <tr><td class="fw6">Lee Chee Wei</td><td><span class="badge badge-amber">Unknown</span></td><td class="mono text-green fw6">+$115.50</td><td class="text-muted">&#9888; Tag in Transactions</td></tr>
-        <tr><td class="fw6">Interest Earned</td><td><span class="badge badge-green">Interest</span></td><td class="mono text-green fw6">+$0.04</td><td class="text-muted">DBS Multiplier</td></tr>
-      </tbody></table>
+      <table class="tbl"><thead><tr><th>Date</th><th>Description</th><th>Source</th><th>Amount</th><th>Category</th><th>Action</th></tr></thead>
+      <tbody id="income-sources-body"></tbody></table>
     </div>
   </div>
 </div>
@@ -365,8 +380,21 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
 <!-- TRANSACTIONS -->
 <div class="page" id="page-transactions">
   <div class="tx-controls">
-    <input type="text" class="tx-search" placeholder="Search transactions..." id="tx-search" oninput="filterTx()">
-    <select class="select-ctrl" id="tx-month" onchange="filterTx()"><option value="all">All Months</option><option value="Mar 2026" selected>March 2026</option></select>
+    <input type="text" class="tx-search" placeholder="Search description, source, category or amount..." id="tx-search" oninput="filterTx()">
+    <select class="select-ctrl" id="tx-month-sel" onchange="filterTx()">
+      <option value="all">All Months</option>
+      <option value="1">Jan</option><option value="2">Feb</option>
+      <option value="3" selected>Mar</option><option value="4">Apr</option>
+      <option value="5">May</option><option value="6">Jun</option>
+      <option value="7">Jul</option><option value="8">Aug</option>
+      <option value="9">Sep</option><option value="10">Oct</option>
+      <option value="11">Nov</option><option value="12">Dec</option>
+    </select>
+    <select class="select-ctrl" id="tx-year-sel" onchange="filterTx()">
+      <option value="all">All Years</option>
+      <option value="2025">2025</option>
+      <option value="2026" selected>2026</option>
+    </select>
     <select class="select-ctrl" id="tx-type" onchange="filterTx()"><option value="all">All Types</option><option value="income">Income</option><option value="expense">Expenses</option><option value="internal">Internal</option></select>
     <select class="select-ctrl" id="tx-cat-filter" onchange="filterTx()"><option value="all">All Categories</option></select>
     <div class="currency-tabs"><button class="currency-tab active" onclick="setCurrency('SGD',this)">SGD</button><button class="currency-tab" onclick="setCurrency('JPY',this)">JPY</button></div>
@@ -402,6 +430,11 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
       <p class="section-note" style="margin-top:8px">Your key is stored only in your browser (localStorage). It never leaves your device except to call api.anthropic.com directly.</p>
     </div>
     <div class="settings-section">
+      <div class="settings-title">Categories <span style="font-size:13px;font-weight:500;color:var(--text3)">Rename or delete spending categories</span></div>
+      <div id="cat-settings-list" style="margin-bottom:16px"></div>
+      <button class="btn sm" onclick="openAddCatFromSettings()">+ Add Category</button>
+    </div>
+    <div class="settings-section">
       <div class="settings-title">Display</div>
       <div class="setting-row"><div><div class="setting-name">Dark Mode</div><div class="setting-desc">Switch between light and dark theme</div></div><div class="toggle-wrap"><span class="toggle-label" id="theme-label">Off</span><button class="toggle" id="theme-toggle-btn" onclick="toggleTheme()"></button></div></div>
     </div>
@@ -418,6 +451,28 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
 </div>
 </div>
 <button class="scroll-top" id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Back to top">&#8679;</button>
+
+
+<!-- RENAME CATEGORY MODAL -->
+<div class="modal-overlay" id="rename-cat-modal">
+  <div class="modal" style="width:400px">
+    <h3>Rename Category</h3>
+    <p id="rename-cat-desc">Enter a new name for this category.</p>
+    <div class="modal-field">
+      <label>Current Name</label>
+      <input type="text" id="rename-cat-old" disabled style="opacity:.6">
+    </div>
+    <div class="modal-field">
+      <label>New Name</label>
+      <input type="text" id="rename-cat-new" placeholder="e.g. Dining Out, Entertainment...">
+    </div>
+    <div class="modal-btns">
+      <button class="btn danger" id="rename-cat-del-btn" onclick="deleteCategoryFromSettings()" style="margin-right:auto">Delete</button>
+      <button class="btn" onclick="getEl('rename-cat-modal').classList.remove('open')">Cancel</button>
+      <button class="btn primary" onclick="saveCategoryRename()">Rename</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODALS -->
 
@@ -565,6 +620,230 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
 <div class="toast" id="toast"></div>
 
 <script>
+// ── INCOME SOURCES ────────────────────────────────────────────────────────────
+function toggleIncomeFilter(){
+  S.incomeUntaggedOnly=!S.incomeUntaggedOnly;saveS();
+  const btn=getEl('income-untagged-toggle');
+  if(btn)btn.classList.toggle('on',!!S.incomeUntaggedOnly);
+  renderIncomeSources();
+}
+
+function renderIncomeSources(){
+  const el=getEl('income-sources-body');if(!el)return;
+  const untaggedOnly=!!S.incomeUntaggedOnly;
+  const btn=getEl('income-untagged-toggle');
+  if(btn)btn.classList.toggle('on',untaggedOnly);
+  // Get income transactions, optionally filter to Unknown only
+  let txs=TRANSACTIONS.filter(t=>t.type==='income');
+  if(untaggedOnly)txs=txs.filter(t=>t.category==='Unknown');
+  const subtitle=getEl('income-sources-subtitle');
+  if(subtitle)subtitle.textContent=untaggedOnly?'Showing untagged only ('+txs.length+' transactions)':'All income ('+txs.length+' transactions)';
+  if(!txs.length){
+    el.innerHTML='<tr><td colspan="6"><div class="empty-state">'+(untaggedOnly?'All income transactions are tagged! Great job.':'No income transactions found.')+'</div></td></tr>';
+    return;
+  }
+  el.innerHTML=txs.map(t=>{
+    const isUnknown=t.category==='Unknown';
+    const catBadge=isUnknown?'<span class="badge badge-amber">&#9888; Unknown</span>':'<span class="badge badge-blue">'+t.category+'</span>';
+    return '<tr>'+
+      '<td class="mono text-muted" style="font-size:12px">'+t.date+'</td>'+
+      '<td class="fw6">'+t.desc+'</td>'+
+      '<td style="font-size:12px;color:var(--text3)">'+t.source+'</td>'+
+      '<td class="mono text-green fw6">+$'+fmt(t.amount)+'</td>'+
+      '<td>'+catBadge+'</td>'+
+      '<td>'+(isUnknown?'<button class="btn xs" style="border-color:var(--accent);color:var(--accent)" data-id="'+t.id+'" onclick="quickTagIncome(parseInt(this.dataset.id))">Tag</button>':'')+'</td>'+
+    '</tr>';
+  }).join('');
+}
+
+function quickTagIncome(id){
+  // Jump to transactions tab and highlight this transaction
+  const tab=document.querySelector('.nav-tab[data-page="transactions"]');
+  if(tab){showPage('transactions',tab);}
+  setTimeout(()=>{
+    const searchEl=getEl('tx-search');
+    if(searchEl){
+      const tx=TRANSACTIONS.find(t=>t.id===id);
+      if(tx){searchEl.value=tx.desc;filterTx();}
+    }
+  },100);
+  showToast('Find and tag this transaction in the Transactions tab');
+}
+
+
+// ── P&L HISTORY ───────────────────────────────────────────────────────────────
+function renderPnLHistory(){
+  const el=getEl('pnl-history');if(!el)return;
+  const endSel=getEl('pnl-end-month');
+  const endVal=endSel?endSel.value:'3-2026';
+  const [endM,endY]=endVal.split('-').map(Number);
+  // Build 3 months ending at selection
+  const months=[];
+  for(let i=2;i>=0;i--){
+    let m=endM-i,y=endY;
+    if(m<=0){m+=12;y--;}
+    const MNAMES=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    months.push(MNAMES[m-1]+' '+y);
+  }
+  // Collect all unique months from transactions
+  const allMonths=[...new Set(TRANSACTIONS.map(t=>t.month))].sort();
+  let html='';let totalInc=0,totalExp=0;
+  months.forEach(mon=>{
+    const txs=TRANSACTIONS.filter(t=>t.month===mon);
+    if(!txs.length&&!allMonths.includes(mon)){
+      html+='<tr style="opacity:.4"><td class="text-muted fw6">'+mon+'</td><td colspan="5" class="text-muted">No statement uploaded</td></tr>';
+      return;
+    }
+    const inc=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const exp=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const net=inc-exp;const rate=inc>0?(net/inc*100).toFixed(1):0;
+    totalInc+=inc;totalExp+=exp;
+    html+='<tr>'+
+      '<td class="fw6">'+mon+'</td>'+
+      '<td class="mono text-green">+$'+fmt(inc)+'</td>'+
+      '<td class="mono text-red">-$'+fmt(exp)+'</td>'+
+      '<td class="mono fw6 '+(net>=0?'text-green':'text-red')+'">'+(net>=0?'+':'-')+'$'+fmt(Math.abs(net))+'</td>'+
+      '<td class="mono">'+rate+'%</td>'+
+      '<td><span class="badge '+(net>=0?'badge-green':'badge-red')+'">'+(net>=0?'Surplus':'Deficit')+'</span></td>'+
+    '</tr>';
+  });
+  // 3-month total row
+  const totalNet=totalInc-totalExp;
+  const avgRate=totalInc>0?(totalNet/totalInc*100).toFixed(1):0;
+  html+='<tr style="background:var(--surface2);font-weight:700">'+
+    '<td class="fw7">3-Month Total</td>'+
+    '<td class="mono text-green fw7">+$'+fmt(totalInc)+'</td>'+
+    '<td class="mono text-red fw7">-$'+fmt(totalExp)+'</td>'+
+    '<td class="mono fw7 '+(totalNet>=0?'text-green':'text-red')+'">'+(totalNet>=0?'+':'-')+'$'+fmt(Math.abs(totalNet))+'</td>'+
+    '<td class="mono fw7">'+avgRate+'%</td>'+
+    '<td><span class="badge '+(totalNet>=0?'badge-green':'badge-red')+'">'+(totalNet>=0?'Surplus':'Deficit')+'</span></td>'+
+  '</tr>';
+  el.innerHTML=html;
+  const noteEl=getEl('pnl-note');
+  if(noteEl)noteEl.textContent='Upload more statements to populate past months. Change ending month above to view different periods.';
+}
+
+
+// ── CATEGORY SETTINGS ─────────────────────────────────────────────────────────
+function renderCatSettings(){
+  const el=getEl('cat-settings-list');if(!el)return;
+  const PROTECTED=['Salary','Claims','Internal Transfer','Unknown'];
+  const custom=S.categories.filter(c=>!PROTECTED.includes(c));
+  const builtin=S.categories.filter(c=>PROTECTED.includes(c));
+
+  let html='';
+
+  // ── Custom categories (renameable + deletable) ──
+  html+='<div style="margin-bottom:16px">';
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Your Categories</div>';
+  if(custom.length){
+    html+='<div style="display:flex;flex-direction:column;gap:6px">';
+    html+=custom.map(cat=>{
+      const txCount=TRANSACTIONS.filter(t=>t.category===cat).length;
+      return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:10px 14px">'+
+        '<div>'+
+          '<span style="font-size:14px;font-weight:600">'+cat+'</span>'+
+          '<span style="font-size:12px;color:var(--text3);margin-left:8px">'+txCount+' transaction'+(txCount!==1?'s':'')+'</span>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px">'+
+          '<button class="btn xs" data-cat="'+cat+'" onclick="openRenameCat(this.dataset.cat)">✎ Rename</button>'+
+          '<button class="btn xs" data-cat="'+cat+'" onclick="confirmDeleteCat(this.dataset.cat)" style="border-color:var(--red);color:var(--red)">Delete</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    html+='</div>';
+  } else {
+    html+='<div style="padding:14px;background:var(--surface2);border-radius:var(--rs);font-size:13px;color:var(--text3);text-align:center">No custom categories yet. Add one below.</div>';
+  }
+  html+='</div>';
+
+  // ── Built-in categories (renameable only) ──
+  html+='<div>';
+  html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text3);margin-bottom:10px">Built-in Categories <span style="font-weight:400;text-transform:none;letter-spacing:0">(rename only — cannot delete)</span></div>';
+  html+='<div style="display:flex;flex-direction:column;gap:6px">';
+  html+=builtin.map(cat=>{
+    const txCount=TRANSACTIONS.filter(t=>t.category===cat).length;
+    return '<div style="display:flex;align-items:center;justify-content:space-between;background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:10px 14px;opacity:.85">'+
+      '<div>'+
+        '<span style="font-size:14px;font-weight:600">'+cat+'</span>'+
+        '<span style="font-size:12px;color:var(--text3);margin-left:8px">'+txCount+' transaction'+(txCount!==1?'s':'')+'</span>'+
+        '<span class="badge badge-blue" style="margin-left:8px;font-size:10px">Built-in</span>'+
+      '</div>'+
+      '<button class="btn xs" data-cat="'+cat+'" onclick="openRenameCat(this.dataset.cat)">✎ Rename</button>'+
+    '</div>';
+  }).join('');
+  html+='</div>';
+  html+='</div>';
+
+  el.innerHTML=html;
+}
+
+function openRenameCat(cat){
+  getEl('rename-cat-old').value=cat;
+  getEl('rename-cat-new').value=cat;
+  getEl('rename-cat-desc').textContent='Renaming will update all transactions with this category.';
+  const delBtn=getEl('rename-cat-del-btn');
+  const protected_=['Salary','Claims','Internal Transfer','Unknown'];
+  delBtn.style.display=protected_.includes(cat)?'none':'block';
+  getEl('rename-cat-modal').classList.add('open');
+}
+
+function saveCategoryRename(){
+  const oldName=getEl('rename-cat-old').value.trim();
+  const newName=getEl('rename-cat-new').value.trim();
+  if(!newName){showToast('Enter a new name');return;}
+  if(newName===oldName){getEl('rename-cat-modal').classList.remove('open');return;}
+  if(S.categories.includes(newName)){showToast('That name already exists');return;}
+  // Rename in categories list
+  const idx=S.categories.indexOf(oldName);
+  if(idx>-1)S.categories[idx]=newName;
+  // Update all transactions
+  let txCount=0;
+  TRANSACTIONS.forEach(t=>{
+    if(t.category===oldName){t.category=newName;txCount++;}
+    if(t.defaultCat===oldName)t.defaultCat=newName;
+  });
+  // Update catOverrides
+  Object.keys(S.catOverrides).forEach(k=>{
+    if(S.catOverrides[k]===oldName)S.catOverrides[k]=newName;
+  });
+  // Update budgets
+  S.budgets.forEach(b=>{if(b.category===oldName)b.category=newName;});
+  saveS();
+  getEl('rename-cat-modal').classList.remove('open');
+  renderCatSettings();
+  calcSummary();filterTx();populateCatFilter();
+  showToast('Renamed "'+oldName+'" to "'+newName+'" across '+txCount+' transactions');
+}
+
+function confirmDeleteCat(cat){
+  getEl('rename-cat-old').value=cat;
+  getEl('rename-cat-new').value=cat;
+  getEl('rename-cat-desc').textContent='Delete this category? All transactions tagged with it will become "Unknown".';
+  getEl('rename-cat-del-btn').style.display='block';
+  getEl('rename-cat-modal').classList.add('open');
+}
+
+function deleteCategoryFromSettings(){
+  const cat=getEl('rename-cat-old').value.trim();
+  const protected_=['Salary','Claims','Internal Transfer','Unknown'];
+  if(protected_.includes(cat)){showToast('Cannot delete built-in category');return;}
+  S.categories=S.categories.filter(c=>c!==cat);
+  TRANSACTIONS.forEach(t=>{if(t.category===cat)t.category='Unknown';});
+  Object.keys(S.catOverrides).forEach(k=>{if(S.catOverrides[k]===cat)delete S.catOverrides[k];});
+  S.budgets=S.budgets.filter(b=>b.category!==cat);
+  saveS();
+  getEl('rename-cat-modal').classList.remove('open');
+  renderCatSettings();calcSummary();filterTx();populateCatFilter();
+  showToast('"'+cat+'" deleted — transactions moved to Unknown');
+}
+
+function openAddCatFromSettings(){
+  pendingCatTxId=null;
+  getEl('cat-modal').classList.add('open');
+}
+
+
 // ── PDF STATEMENT UPLOAD & PARSE ─────────────────────────────────────────────
 let uploadedFile = null;
 
@@ -789,6 +1068,7 @@ if(!S.activePage)S.activePage='monthly';
 if(!S.apiKey)S.apiKey='';
 if(!S.usdSgd)S.usdSgd=1.34;
 if(!S.activeProfileId)S.activeProfileId='jason';
+if(S.incomeUntaggedOnly===undefined)S.incomeUntaggedOnly=false;
 if(S.includeCPFinNW===undefined)S.includeCPFinNW=true;
 if(!S.pricesTs)S.pricesTs=null;
 if(!S.cpfTransactions)S.cpfTransactions=[];
@@ -900,7 +1180,7 @@ async function testApiKey() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init(){
-  applyTheme();renderProfileTabs();renderProfileSwitcher();renderSettingsAccounts();calcSummary();renderBudgets();
+  applyTheme();renderProfileTabs();renderProfileSwitcher();renderSettingsAccounts();renderCatSettings();calcSummary();renderBudgets();
   rebuildMonthlyChart();
   try{renderNW();}catch(e){console.warn('renderNW:',e);}
   filterTx();populateCatFilter();
@@ -937,6 +1217,7 @@ function showPage(name,tab){
   if(name==='monthly'){calcSummary();rebuildMonthlyChart();}
   if(name==='networth'){renderNW();rebuildNWChart();calcCPF();}
   if(name==='transactions'){filterTx();populateCatFilter();}
+  if(name==='settings'){renderCatSettings();}
 }
 
 // ── MONTHLY ───────────────────────────────────────────────────────────────────
@@ -953,7 +1234,7 @@ function calcSummary(){
     '<td class="mono fw6 '+(net>=0?'text-green':'text-red')+'">'+(net>=0?'+':'-')+'$'+fmt(Math.abs(net))+'</td>'+
     '<td class="mono">'+rate+'%</td><td><span class="badge '+(net>=0?'badge-green':'badge-red')+'">'+(net>=0?'Surplus':'Deficit')+'</span></td></tr>'+
     '<tr style="opacity:.4"><td class="text-muted">February 2026</td><td colspan="5" class="text-muted">Upload Feb statement</td></tr>';
-  buildCatBreakdown(exp);renderBudgets();
+  buildCatBreakdown(exp);renderBudgets();renderPnLHistory();renderIncomeSources();
 }
 function buildCatBreakdown(total){
   const map={};TRANSACTIONS.filter(t=>t.type==='expense').forEach(t=>{map[t.category]=(map[t.category]||0)+t.amount;});
