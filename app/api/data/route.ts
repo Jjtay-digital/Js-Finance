@@ -2,18 +2,17 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
-function getSupabase() {
+async function getSupabase() {
+  const cookieStore = await cookies()
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        async getAll() {
-          const cookieStore = await cookies()
+        getAll() {
           return cookieStore.getAll()
         },
-        async setAll(cookiesToSet) {
-          const cookieStore = await cookies()
+        setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value, options }) =>
             cookieStore.set(name, value, options)
           )
@@ -29,9 +28,10 @@ export async function GET(request: NextRequest) {
   const userId = searchParams.get('userId')
   if (!userId) return NextResponse.json({ error: 'No userId' }, { status: 400 })
 
-  const supabase = getSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await getSupabase()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  console.log('GET auth check:', user?.id, 'requested:', userId, 'error:', authError?.message)
+  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized', debug: { hasUser: !!user, userId: user?.id } }, { status: 401 })
 
   const [
     { data: settings },
@@ -134,9 +134,10 @@ export async function POST(request: NextRequest) {
   const { userId, state } = await request.json()
   if (!userId || !state) return NextResponse.json({ error: 'Missing data' }, { status: 400 })
 
-  const supabase = getSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const supabase = await getSupabase()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  console.log('GET auth check:', user?.id, 'requested:', userId, 'error:', authError?.message)
+  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized', debug: { hasUser: !!user, userId: user?.id } }, { status: 401 })
 
   const S = state
   const now = new Date().toISOString()
