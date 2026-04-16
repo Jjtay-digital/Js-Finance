@@ -80,34 +80,36 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
       <style dangerouslySetInnerHTML={{ __html: DASHBOARD_CSS }} />
       <div dangerouslySetInnerHTML={{ __html: DASHBOARD_BODY }} />
 
-      {/* Sign out button — fixed bottom right */}
+      {/* Sign out — injected into topbar right side after render */}
       <div
         id="signout-btn"
         style={{
-          display: 'none', position: 'fixed', bottom: '80px', right: '28px',
+          display: 'none', position: 'fixed', top: '11px', right: '70px',
           zIndex: 200, alignItems: 'center', gap: '10px',
-          background: 'var(--surface)', border: '1.5px solid var(--border)',
-          borderRadius: '12px', padding: '10px 16px',
-          boxShadow: '0 4px 16px rgba(0,0,0,.12)'
         }}
       >
         <img
           id="user-avatar"
-          width={28} height={28}
-          style={{ borderRadius: '50%', display: 'none' }}
+          width={32} height={32}
+          style={{ borderRadius: '50%', display: 'none', border: '2px solid var(--border)' }}
           alt=""
         />
-        <span id="user-display-name" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)' }} />
+        <span id="user-display-name" style={{
+          fontSize: '13px', fontWeight: 600, color: 'var(--text2)',
+          background: 'var(--surface2)', padding: '4px 10px',
+          borderRadius: '20px', border: '1px solid var(--border)'
+        }} />
         <button
           onClick={handleSignOut}
           style={{
-            fontSize: '12px', fontWeight: 600, color: 'var(--red)',
-            background: 'var(--red-bg)', border: '1.5px solid var(--red)',
-            borderRadius: '8px', padding: '4px 12px', cursor: 'pointer',
-            fontFamily: 'Outfit, sans-serif'
+            fontSize: '12px', fontWeight: 600, color: 'var(--text3)',
+            background: 'transparent', border: 'none',
+            cursor: 'pointer', fontFamily: 'Outfit, sans-serif',
+            padding: '4px 8px', borderRadius: '6px',
+            textDecoration: 'underline'
           }}
         >
-          Sign Out
+          Sign out
         </button>
       </div>
     </>
