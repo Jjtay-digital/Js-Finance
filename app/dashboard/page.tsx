@@ -67,6 +67,15 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     w._userEmail = user.email
     w._userRole = user.role || 'guest'
 
+    // Pre-patch saveS BEFORE dashboard.js runs so ALL saves go to Supabase
+    // including the ones triggered during init()
+    w._pendingSaves = []
+    w.saveS = function() {
+      // Will be replaced with real implementation after localStorage saveS is defined
+      // For now queue the save
+      w._pendingSaves.push(Date.now())
+    }
+
     // Load dashboard JS as external static file (avoids CSP/inline script issues)
     await new Promise<void>((resolve, reject) => {
       // Check if already loaded
@@ -158,15 +167,25 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     }
 
     // Step 5: Patch saveS to sync to Supabase on every save
-    const originalSaveS = w.saveS
+    // Now that dashboard.js has defined the real saveS, patch it properly
+    const realSaveS = w.saveS
     w.saveS = function() {
-      originalSaveS() // Save to localStorage first (instant)
+      realSaveS() // Save to localStorage first (instant)
       // Then sync to Supabase in background (non-blocking)
       fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, state: w.S })
       }).catch(e => console.warn('Supabase sync failed:', e))
+    }
+    // Process any saves that happened during init()
+    if (w._pendingSaves?.length > 0) {
+      console.log('Flushing', w._pendingSaves.length, 'pending saves to Supabase')
+      fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, state: w.S })
+      }).catch(e => console.warn('Supabase flush failed:', e))
     }
 
     // Step 6: UI polish
