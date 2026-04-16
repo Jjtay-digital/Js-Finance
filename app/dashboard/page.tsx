@@ -40,24 +40,84 @@ export default function DashboardPage() {
 
 function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
   const scriptInjected = useRef(false)
+  const [dbReady, setDbReady] = useState(false)
 
   useEffect(() => {
     if (scriptInjected.current) return
     scriptInjected.current = true
 
-    // Execute the dashboard script by creating a proper script element
+    // Load all user data from Supabase first, then init dashboard
+    loadAndInitDashboard()
+  }, [])
+
+  async function loadAndInitDashboard() {
+    const w = window as any
+    try {
+      // Fetch all user data from Supabase
+      const res = await fetch('/api/data?userId=' + user.id)
+      const data = res.ok ? await res.json() : null
+
+      // Build state from Supabase data or use defaults
+      if (data && (data.assets?.length || data.settings)) {
+        // Store loaded data in window for dashboard to pick up
+        w._supabaseData = data
+        w._userId = user.id
+      }
+    } catch (e) {
+      console.warn('Could not load from Supabase, using localStorage fallback:', e)
+    }
+
+    // Execute the dashboard script
     const script = document.createElement('script')
     script.textContent = DASHBOARD_SCRIPT
     document.body.appendChild(script)
 
-    // After script runs, inject user info into the dashboard
+    // After script runs, apply Supabase data and set up sync
     setTimeout(() => {
-      const w = window as any
-      if (w.S) {
-        w.S._loggedInEmail = user.email
-        w.S._loggedInName = user.user_metadata?.full_name || user.email
+      if (w.S && w._supabaseData) {
+        const d = w._supabaseData
+        // Apply loaded data to dashboard state
+        if (d.assets?.length) w.S.assets = d.assets
+        if (d.liabilities?.length) w.S.liabilities = d.liabilities
+        if (d.categories?.length) w.S.categories = d.categories
+        if (d.budgets?.length) w.S.budgets = d.budgets
+        if (d.cpfTxs?.length) w.S.cpfTransactions = d.cpfTxs
+        if (d.catOverrides) w.S.catOverrides = d.catOverrides
+        if (d.settings) {
+          const s = d.settings
+          if (s.theme) w.S.theme = s.theme
+          if (s.usd_sgd) w.S.usdSgd = s.usd_sgd
+          if (s.api_key) w.S.apiKey = s.api_key
+          if (s.include_cpf_in_nw !== null) w.S.includeCPFinNW = s.include_cpf_in_nw
+          if (s.peer_data) w.S.peerData = s.peer_data
+        }
+        // Re-render with loaded data
+        if (w.renderNW) w.renderNW()
+        if (w.calcSummary) w.calcSummary()
+        if (w.applyTheme) w.applyTheme()
+        if (w.loadApiKeyDisplay) w.loadApiKeyDisplay()
       }
-      // Show user info + sign out button in topbar
+
+      // Set up auto-sync: patch saveS() to also save to Supabase
+      const originalSaveS = w.saveS
+      w.saveS = async function() {
+        originalSaveS() // still save to localStorage as backup
+        // Sync to Supabase in background
+        try {
+          await fetch('/api/data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id, state: w.S })
+          })
+        } catch(e) {
+          console.warn('Supabase sync failed, data saved locally:', e)
+        }
+      }
+
+      w.S._loggedInEmail = user.email
+      w.S._userId = user.id
+
+      // Show user info
       const nameEl = document.getElementById('user-display-name')
       if (nameEl) nameEl.textContent = user.user_metadata?.full_name?.split(' ')[0] || 'You'
       const signOutBtn = document.getElementById('signout-btn')
@@ -67,8 +127,9 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
         avatarEl.src = user.user_metadata.avatar_url
         avatarEl.style.display = 'block'
       }
-    }, 300)
-  }, [])
+      setDbReady(true)
+    }, 400)
+  }
 
   async function handleSignOut() {
     await supabase.auth.signOut()

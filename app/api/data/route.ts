@@ -1,0 +1,184 @@
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
+
+function getSupabase() {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        async getAll() {
+          const cookieStore = await cookies()
+          return cookieStore.getAll()
+        },
+        async setAll(cookiesToSet) {
+          const cookieStore = await cookies()
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+}
+
+// GET — load all user data
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const userId = searchParams.get('userId')
+  if (!userId) return NextResponse.json({ error: 'No userId' }, { status: 400 })
+
+  const supabase = getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const [
+    { data: settings },
+    { data: assets },
+    { data: liabilities },
+    { data: catOverrides },
+    { data: categories },
+    { data: budgets },
+    { data: cpfTxs },
+  ] = await Promise.all([
+    supabase.from('settings').select('*').eq('user_id', userId).single(),
+    supabase.from('assets').select('*').eq('user_id', userId).order('created_at'),
+    supabase.from('liabilities').select('*').eq('user_id', userId).order('created_at'),
+    supabase.from('cat_overrides').select('*').eq('user_id', userId),
+    supabase.from('categories').select('name').eq('user_id', userId),
+    supabase.from('budgets').select('*').eq('user_id', userId),
+    supabase.from('cpf_transactions').select('*').eq('user_id', userId).order('created_at'),
+  ])
+
+  // Convert DB format back to dashboard format
+  const mappedAssets = (assets || []).map((a: any) => ({
+    id: a.id, type: a.type, name: a.name, owner: a.owner,
+    value: a.value, ticker: a.ticker, market: a.market,
+    shares: a.shares, cost: a.cost, currentPrice: a.current_price,
+    cpfOA: a.cpf_oa, cpfSA: a.cpf_sa, cpfMA: a.cpf_ma,
+    subtype: a.subtype, myShare: a.my_share,
+    includeInNW: a.include_in_nw, desc: a.desc_text, locked: a.locked,
+  }))
+
+  const mappedLiabs = (liabilities || []).map((l: any) => ({
+    id: l.id, name: l.name, type: l.type, amount: l.amount,
+    fullAmount: l.full_amount, myShare: l.my_share,
+    freq: l.freq, owner: l.owner, notes: l.notes, debit: l.debit,
+  }))
+
+  const overridesMap: Record<number, string> = {}
+  ;(catOverrides || []).forEach((r: any) => { overridesMap[r.tx_id] = r.category })
+
+  const mappedBudgets = (budgets || []).map((b: any) => ({
+    category: b.category, limit: b.limit_amount
+  }))
+
+  const mappedCpfTxs = (cpfTxs || []).map((t: any) => ({
+    id: t.id, date: t.date, desc: t.desc, amount: t.amount,
+    account: t.account, type: t.type, detail: t.detail, editable: t.editable,
+  }))
+
+  return NextResponse.json({
+    settings,
+    assets: mappedAssets,
+    liabilities: mappedLiabs,
+    catOverrides: overridesMap,
+    categories: (categories || []).map((c: any) => c.name),
+    budgets: mappedBudgets,
+    cpfTxs: mappedCpfTxs,
+  })
+}
+
+// POST — save full state
+export async function POST(request: NextRequest) {
+  const { userId, state } = await request.json()
+  if (!userId || !state) return NextResponse.json({ error: 'Missing data' }, { status: 400 })
+
+  const supabase = getSupabase()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const S = state
+  const now = new Date().toISOString()
+
+  // Save settings
+  await supabase.from('settings').upsert({
+    user_id: userId,
+    theme: S.theme,
+    usd_sgd: S.usdSgd,
+    prices_ts: S.pricesTs,
+    include_cpf_in_nw: S.includeCPFinNW,
+    income_untagged_only: S.incomeUntaggedOnly,
+    api_key: S.apiKey,
+    peer_data: S.peerData,
+    updated_at: now,
+  })
+
+  // Save assets
+  if (S.assets?.length) {
+    await supabase.from('assets').delete().eq('user_id', userId)
+    await supabase.from('assets').insert(S.assets.map((a: any) => ({
+      id: a.id, user_id: userId, type: a.type, name: a.name, owner: a.owner,
+      value: a.value || 0, ticker: a.ticker, market: a.market,
+      shares: a.shares, cost: a.cost, current_price: a.currentPrice,
+      cpf_oa: a.cpfOA || 0, cpf_sa: a.cpfSA || 0, cpf_ma: a.cpfMA || 0,
+      subtype: a.subtype, my_share: a.myShare,
+      include_in_nw: a.includeInNW !== false,
+      desc_text: a.desc, locked: a.locked || false, updated_at: now,
+    })))
+  }
+
+  // Save liabilities
+  if (S.liabilities?.length) {
+    await supabase.from('liabilities').delete().eq('user_id', userId)
+    await supabase.from('liabilities').insert(S.liabilities.map((l: any) => ({
+      id: l.id, user_id: userId, name: l.name, type: l.type,
+      amount: l.amount, full_amount: l.fullAmount, my_share: l.myShare,
+      freq: l.freq, owner: l.owner, notes: l.notes, debit: l.debit,
+      updated_at: now,
+    })))
+  }
+
+  // Save categories
+  if (S.categories?.length) {
+    await supabase.from('categories').delete().eq('user_id', userId)
+    await supabase.from('categories').insert(
+      S.categories.map((name: string) => ({ user_id: userId, name }))
+    )
+  }
+
+  // Save cat overrides
+  if (S.catOverrides && Object.keys(S.catOverrides).length) {
+    await supabase.from('cat_overrides').delete().eq('user_id', userId)
+    await supabase.from('cat_overrides').insert(
+      Object.entries(S.catOverrides).map(([txId, cat]) => ({
+        user_id: userId, tx_id: parseInt(txId), category: cat
+      }))
+    )
+  }
+
+  // Save budgets
+  await supabase.from('budgets').delete().eq('user_id', userId)
+  if (S.budgets?.length) {
+    await supabase.from('budgets').insert(
+      S.budgets.map((b: any) => ({
+        user_id: userId, category: b.category, limit_amount: b.limit
+      }))
+    )
+  }
+
+  // Save CPF transactions
+  if (S.cpfTransactions?.length) {
+    await supabase.from('cpf_transactions').delete().eq('user_id', userId)
+    await supabase.from('cpf_transactions').insert(
+      S.cpfTransactions.map((t: any) => ({
+        id: t.id, user_id: userId, date: t.date, desc: t.desc,
+        amount: t.amount, account: t.account, type: t.type,
+        detail: t.detail, editable: t.editable,
+      }))
+    )
+  }
+
+  return NextResponse.json({ ok: true })
+}
