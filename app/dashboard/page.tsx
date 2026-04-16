@@ -61,37 +61,53 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
 
   async function loadAndInitDashboard() {
     const w = window as any
-    try {
-      // Fetch all user data from Supabase
-      const res = await fetch('/api/data?userId=' + user.id)
-      const data = res.ok ? await res.json() : null
 
-      // Build state from Supabase data or use defaults
-      if (data && (data.assets?.length || data.settings)) {
-        // Store loaded data in window for dashboard to pick up
-        w._supabaseData = data
-        w._userId = user.id
-      }
-    } catch (e) {
-      console.warn('Could not load from Supabase, using localStorage fallback:', e)
-    }
-
-    // Execute the dashboard script
+    // Step 1: Execute dashboard script first (sets up w.S with localStorage data)
     const script = document.createElement('script')
     script.textContent = DASHBOARD_SCRIPT
     document.body.appendChild(script)
 
-    // After script runs, apply Supabase data and set up sync
-    setTimeout(() => {
-      if (w.S && w._supabaseData) {
-        const d = w._supabaseData
-        // Apply loaded data to dashboard state
-        if (d.assets?.length) w.S.assets = d.assets
-        if (d.liabilities?.length) w.S.liabilities = d.liabilities
-        if (d.categories?.length) w.S.categories = d.categories
-        if (d.budgets?.length) w.S.budgets = d.budgets
-        if (d.cpfTxs?.length) w.S.cpfTransactions = d.cpfTxs
-        if (d.catOverrides) w.S.catOverrides = d.catOverrides
+    // Step 2: Wait for script to initialise, then load Supabase data on top
+    await new Promise(r => setTimeout(r, 300))
+
+    if (!w.S) {
+      console.error('Dashboard script failed to initialise')
+      return
+    }
+
+    // Step 3: Set user info
+    w.S._loggedInEmail = user.email
+    w.S._userId = user.id
+    w.S._userRole = user.role || 'guest'
+
+    // Step 4: Load from Supabase (overrides localStorage with server truth)
+    try {
+      const res = await fetch('/api/data?userId=' + user.id)
+      if (res.ok) {
+        const d = await res.json()
+        let hasServerData = false
+
+        // Apply assets if server has any
+        if (d.assets && d.assets.length > 0) {
+          w.S.assets = d.assets
+          hasServerData = true
+        }
+        if (d.liabilities && d.liabilities.length > 0) {
+          w.S.liabilities = d.liabilities
+          hasServerData = true
+        }
+        if (d.categories && d.categories.length > 0) {
+          w.S.categories = d.categories
+        }
+        if (d.budgets && d.budgets.length > 0) {
+          w.S.budgets = d.budgets
+        }
+        if (d.cpfTxs && d.cpfTxs.length > 0) {
+          w.S.cpfTransactions = d.cpfTxs
+        }
+        if (d.catOverrides && Object.keys(d.catOverrides).length > 0) {
+          w.S.catOverrides = d.catOverrides
+        }
         if (d.settings) {
           const s = d.settings
           if (s.theme) w.S.theme = s.theme
@@ -101,68 +117,68 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
           if (s.share_api_key !== null) w.S.shareApiKey = s.share_api_key
           if (s.include_cpf_in_nw !== null) w.S.includeCPFinNW = s.include_cpf_in_nw
           if (s.peer_data) w.S.peerData = s.peer_data
+          hasServerData = true
         }
-        // Inject shared keys from family group owner
         if (d.sharedApiKey) w._sharedApiKey = d.sharedApiKey
         if (d.sharedAlphaKey) w._sharedAlphaKey = d.sharedAlphaKey
-        // Re-render with loaded data
-        if (w.renderNW) w.renderNW()
-        if (w.calcSummary) w.calcSummary()
-        if (w.applyTheme) w.applyTheme()
-        if (w.loadApiKeyDisplay) w.loadApiKeyDisplay()
-      }
 
-      // Set up auto-sync: patch saveS() to also save to Supabase
-      const originalSaveS = w.saveS
-      w.saveS = async function() {
-        originalSaveS() // still save to localStorage as backup
-        // Sync to Supabase in background
-        try {
-          await fetch('/api/data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, state: w.S })
-          })
-        } catch(e) {
-          console.warn('Supabase sync failed, data saved locally:', e)
+        // Re-render with server data
+        if (hasServerData) {
+          if (w.renderNW) w.renderNW()
+          if (w.calcSummary) w.calcSummary()
+          if (w.applyTheme) w.applyTheme()
+          if (w.loadApiKeyDisplay) w.loadApiKeyDisplay()
+          if (w.loadAlphaKeyDisplay) w.loadAlphaKeyDisplay()
+          if (w.syncShareKeyUI) w.syncShareKeyUI()
         }
       }
+    } catch (e) {
+      console.warn('Supabase load failed, using localStorage:', e)
+    }
 
-      w.S._loggedInEmail = user.email
-      w.S._userId = user.id
-      w.S._userRole = user.role || 'guest'
+    // Step 5: Patch saveS to sync to Supabase on every save
+    const originalSaveS = w.saveS
+    w.saveS = function() {
+      originalSaveS() // Save to localStorage first (instant)
+      // Then sync to Supabase in background (non-blocking)
+      fetch('/api/data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, state: w.S })
+      }).catch(e => console.warn('Supabase sync failed:', e))
+    }
 
-      // Warn guests they need their own API key
-      if ((user.role === 'guest') && !w.S.apiKey) {
+    // Step 6: UI polish
+    const nameEl = document.getElementById('user-display-name')
+    if (nameEl) nameEl.textContent = user.user_metadata?.full_name?.split(' ')[0] || 'You'
+    const signOutBtn = document.getElementById('signout-btn')
+    if (signOutBtn) signOutBtn.style.display = 'flex'
+    const avatarEl = document.getElementById('user-avatar') as HTMLImageElement
+    if (avatarEl && user.user_metadata?.avatar_url) {
+      avatarEl.src = user.user_metadata.avatar_url
+      avatarEl.style.display = 'block'
+    }
+
+    // Warn guests they need their own API key
+    if (user.role === 'guest' && !w.S.apiKey) {
+      setTimeout(() => {
+        if (w.showToast) w.showToast('👋 Welcome! Go to Settings to add your Anthropic API key for AI features.', 6000)
+      }, 1500)
+    }
+
+    // Check for pending family invites
+    fetch('/api/family').then(r => r.json()).then(familyData => {
+      if (familyData?.pending?.length > 0) {
+        const groupName = familyData.pending[0].family_groups?.name || 'a family group'
         setTimeout(() => {
-          if (w.showToast) w.showToast('👋 Welcome! Go to Settings to add your Anthropic API key for AI features.', 6000)
-        }, 1500)
+          if (w.showToast) w.showToast('📨 Pending invite to "' + groupName + '". Check Settings → Family.', 8000)
+        }, 1000)
       }
+      if (familyData) w._familyData = familyData
+    }).catch(() => {})
 
-      // Show user info
-      const nameEl = document.getElementById('user-display-name')
-      if (nameEl) nameEl.textContent = user.user_metadata?.full_name?.split(' ')[0] || 'You'
-      const signOutBtn = document.getElementById('signout-btn')
-      if (signOutBtn) signOutBtn.style.display = 'flex'
-      const avatarEl = document.getElementById('user-avatar') as HTMLImageElement
-      if (avatarEl && user.user_metadata?.avatar_url) {
-        avatarEl.src = user.user_metadata.avatar_url
-        avatarEl.style.display = 'block'
-      }
-      setDbReady(true)
+    setDbReady(true)
 
-      // Check for pending family invites (non-blocking)
-      fetch('/api/family').then(r => r.json()).then(familyData => {
-        if (familyData?.pending?.length > 0) {
-          const invite = familyData.pending[0]
-          const groupName = invite.family_groups?.name || 'a family group'
-          setTimeout(() => {
-            if (w.showToast) w.showToast('📨 Pending family invite to "' + groupName + '". Check Settings → Family.', 8000)
-          }, 1000)
-        }
-        if (familyData) w._familyData = familyData
-      }).catch(e => console.warn('Could not load family data:', e))
-    }, 400)
   }
 
   async function handleSignOut() {
