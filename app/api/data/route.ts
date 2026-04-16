@@ -159,8 +159,9 @@ export async function POST(request: NextRequest) {
 
   // Save assets
   if (S.assets?.length) {
-    await supabase.from('assets').delete().eq('user_id', userId)
-    await supabase.from('assets').insert(S.assets.map((a: any) => ({
+    const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
+    if (delErr) console.error('Asset delete error:', delErr.message)
+    const { error: insErr } = await supabase.from('assets').insert(S.assets.map((a: any) => ({
       id: a.id, user_id: userId, type: a.type, name: a.name, owner: a.owner,
       value: a.value || 0, ticker: a.ticker, market: a.market,
       shares: a.shares, cost: a.cost, current_price: a.currentPrice,
@@ -222,5 +223,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  console.log('POST complete for userId:', userId)
   return NextResponse.json({ ok: true })
 }
