@@ -468,7 +468,7 @@ function loadS(){
 function saveS(){localStorage.setItem(SK,JSON.stringify(S));}
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let S=loadS();
+window.S=loadS();let S=window.S;
 if(!S.categories)S.categories=[...DEFAULT_CATS];
 if(!S.catOverrides)S.catOverrides={};
 if(!S.budgets)S.budgets=[];
@@ -495,7 +495,7 @@ if(!S.liabilities)S.liabilities=[
   {id:'hdb-inst',name:'HDB Monthly Instalment',type:'Housing Loan',amount:820.15,freq:'Monthly',owner:'Jason',notes:'Auto-deducted CPF OA 10th each month',debit:'cpf-oa'},
 ];
 
-let TRANSACTIONS=BASE_TX.map(t=>({...t,category:S.catOverrides[t.id]??t.defaultCat}));
+window.TRANSACTIONS=BASE_TX.map(t=>({...t,category:S.catOverrides[t.id]??t.defaultCat}));
 let pieChart=null,nwChart=null,editAssetId=null,editLiabId=null,editBudgetIdx=null,pendingCatTxId=null,currentAssetType=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────

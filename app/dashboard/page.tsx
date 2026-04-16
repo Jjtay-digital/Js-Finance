@@ -1,5 +1,5 @@
 'use client'
-import { DASHBOARD_CSS, DASHBOARD_BODY, DASHBOARD_SCRIPT } from './content'
+import { DASHBOARD_CSS, DASHBOARD_BODY } from './content'
 import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
@@ -67,26 +67,32 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     w._userEmail = user.email
     w._userRole = user.role || 'guest'
 
-    // Execute dashboard script (sets up w.S with localStorage data)
-    const script = document.createElement('script')
-    script.textContent = DASHBOARD_SCRIPT
-    document.body.appendChild(script)
+    // Load dashboard JS as external static file (avoids CSP/inline script issues)
+    await new Promise<void>((resolve, reject) => {
+      // Check if already loaded
+      if (w.S) { resolve(); return; }
+      const script = document.createElement('script')
+      script.src = '/dashboard.js'
+      script.onload = () => resolve()
+      script.onerror = (e) => reject(new Error('Failed to load dashboard.js: ' + e))
+      document.body.appendChild(script)
+    })
 
     // Step 2: Wait for script to initialise, then load Supabase data on top
     // Retry up to 10 times with 200ms intervals (2 seconds total)
+    // Wait for dashboard.js to set window.S
     let retries = 0
-    while (!w.S && retries < 10) {
+    while (!w.S && retries < 15) {
       await new Promise(r => setTimeout(r, 200))
       retries++
     }
 
     if (!w.S) {
       console.error('Dashboard script failed to initialise after', retries, 'retries')
-      // Try to show something useful
-      document.body.innerHTML += '<div style="padding:40px;font-family:sans-serif;color:red">Dashboard failed to load. Please refresh the page.</div>'
+      document.body.innerHTML += '<div style="padding:40px;font-family:system-ui;color:red;background:white">Dashboard failed to load. <button onclick="location.reload()">Refresh</button></div>'
       return
     }
-    console.log('Dashboard initialised after', retries * 200, 'ms')
+    console.log('✅ Dashboard initialised, S exists:', !!w.S, 'after', retries * 200, 'ms')
 
     // Step 3: Confirm user info (already set in step 1)
     if (w.S) {
