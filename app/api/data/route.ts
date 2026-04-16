@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
     { data: categories },
     { data: budgets },
     { data: cpfTxs },
+    { data: transactions },
   ] = await Promise.all([
     supabase.from('settings').select('*').eq('user_id', userId).single(),
     supabase.from('assets').select('*').eq('user_id', userId).order('created_at'),
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
     supabase.from('categories').select('name').eq('user_id', userId),
     supabase.from('budgets').select('*').eq('user_id', userId),
     supabase.from('cpf_transactions').select('*').eq('user_id', userId).order('created_at'),
+    supabase.from('transactions').select('*').eq('user_id', userId).order('id'),
   ])
 
   // Convert DB format back to dashboard format
@@ -116,6 +118,18 @@ export async function GET(request: NextRequest) {
     // Family groups may not exist yet, that's fine
   }
 
+  const mappedTransactions = (transactions || []).map((t: any) => ({
+    id: t.id,
+    date: t.date,
+    month: t.month,
+    desc: t.description,
+    source: t.source,
+    type: t.type,
+    amount: parseFloat(t.amount) || 0,
+    defaultCat: t.default_cat,
+    category: t.category,
+  }))
+
   return NextResponse.json({
     settings,
     assets: mappedAssets,
@@ -126,6 +140,7 @@ export async function GET(request: NextRequest) {
     categories: (categories || []).map((c: any) => c.name),
     budgets: mappedBudgets,
     cpfTxs: mappedCpfTxs,
+    transactions: mappedTransactions,
   })
 }
 
@@ -225,6 +240,26 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  console.log('POST complete for userId:', userId)
+  // Save transactions (uploaded from PDF statements)
+  if (S.transactions?.length) {
+    await supabase.from('transactions').delete().eq('user_id', userId)
+    const { error: txErr } = await supabase.from('transactions').insert(
+      S.transactions.map((t: any) => ({
+        id: t.id,
+        user_id: userId,
+        date: t.date,
+        month: t.month,
+        description: t.desc,
+        source: t.source,
+        type: t.type,
+        amount: t.amount || 0,
+        default_cat: t.defaultCat,
+        category: t.category,
+      }))
+    )
+    if (txErr) console.error('Transaction insert error:', txErr.message)
+  }
+
+  console.log('POST complete for userId:', userId, 'transactions:', S.transactions?.length || 0)
   return NextResponse.json({ ok: true })
 }

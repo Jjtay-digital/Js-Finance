@@ -55,10 +55,12 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
       if (orig) {
         w.saveS = function() {
           orig()
-          fetch('/api/data', {
+          // Include transactions in save (they live in window.TRANSACTIONS not window.S)
+        const stateWithTx = { ...w.S, transactions: w.TRANSACTIONS || [] }
+        fetch('/api/data', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: user.id, state: w.S })
+            body: JSON.stringify({ userId: user.id, state: stateWithTx })
           }).catch(() => {})
         }
       }
@@ -76,6 +78,12 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
           if (d.cpfTxs?.length)      { w.S.cpfTransactions = d.cpfTxs }
           if (d.catOverrides && Object.keys(d.catOverrides).length) {
             w.S.catOverrides = d.catOverrides
+          }
+          // Load transactions - replace TRANSACTIONS array
+          if (d.transactions && d.transactions.length > 0) {
+            w.TRANSACTIONS = d.transactions
+            if (w.filterTx) w.filterTx()
+            if (w.calcSummary) w.calcSummary()
           }
           if (d.settings) {
             const s = d.settings
