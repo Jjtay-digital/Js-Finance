@@ -11,14 +11,23 @@ export default function DashboardPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    async function checkAuth() {
+      const { data: { user } } = await supabase.auth.getUser()
       if (!user) {
         router.push('/auth/login')
-      } else {
-        setUser(user)
-        setLoading(false)
+        return
       }
-    })
+      // Check user role
+      const roleRes = await fetch('/api/roles')
+      const roleData = roleRes.ok ? await roleRes.json() : { role: 'guest' }
+      if (roleData.role === 'blocked') {
+        router.push('/blocked')
+        return
+      }
+      setUser({ ...user, role: roleData.role })
+      setLoading(false)
+    }
+    checkAuth()
   }, [])
 
   if (loading) return (
@@ -88,9 +97,14 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
           if (s.theme) w.S.theme = s.theme
           if (s.usd_sgd) w.S.usdSgd = s.usd_sgd
           if (s.api_key) w.S.apiKey = s.api_key
+          if (s.alpha_vantage_key) w.S.alphaVantageKey = s.alpha_vantage_key
+          if (s.share_api_key !== null) w.S.shareApiKey = s.share_api_key
           if (s.include_cpf_in_nw !== null) w.S.includeCPFinNW = s.include_cpf_in_nw
           if (s.peer_data) w.S.peerData = s.peer_data
         }
+        // Inject shared keys from family group owner
+        if (d.sharedApiKey) w._sharedApiKey = d.sharedApiKey
+        if (d.sharedAlphaKey) w._sharedAlphaKey = d.sharedAlphaKey
         // Re-render with loaded data
         if (w.renderNW) w.renderNW()
         if (w.calcSummary) w.calcSummary()
@@ -116,6 +130,14 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
 
       w.S._loggedInEmail = user.email
       w.S._userId = user.id
+      w.S._userRole = user.role || 'guest'
+
+      // Warn guests they need their own API key
+      if ((user.role === 'guest') && !w.S.apiKey) {
+        setTimeout(() => {
+          if (w.showToast) w.showToast('👋 Welcome! Go to Settings to add your Anthropic API key for AI features.', 6000)
+        }, 1500)
+      }
 
       // Show user info
       const nameEl = document.getElementById('user-display-name')
@@ -128,6 +150,18 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
         avatarEl.style.display = 'block'
       }
       setDbReady(true)
+
+      // Check for pending family invites (non-blocking)
+      fetch('/api/family').then(r => r.json()).then(familyData => {
+        if (familyData?.pending?.length > 0) {
+          const invite = familyData.pending[0]
+          const groupName = invite.family_groups?.name || 'a family group'
+          setTimeout(() => {
+            if (w.showToast) w.showToast('📨 Pending family invite to "' + groupName + '". Check Settings → Family.', 8000)
+          }, 1000)
+        }
+        if (familyData) w._familyData = familyData
+      }).catch(e => console.warn('Could not load family data:', e))
     }, 400)
   }
 
@@ -160,6 +194,16 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
           background: 'var(--surface2)', padding: '4px 10px',
           borderRadius: '20px', border: '1px solid var(--border)'
         }} />
+        {user?.role === 'owner' && (
+          <a href="/admin" style={{
+            fontSize: '12px', fontWeight: 600, color: 'var(--accent)',
+            background: 'var(--accent-light)', border: '1.5px solid var(--accent)',
+            borderRadius: '8px', padding: '4px 12px', cursor: 'pointer',
+            fontFamily: 'Outfit, sans-serif', textDecoration: 'none'
+          }}>
+            👑 Users
+          </a>
+        )}
         <button
           onClick={handleSignOut}
           style={{
