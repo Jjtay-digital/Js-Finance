@@ -48,6 +48,14 @@ export async function GET(request: NextRequest) {
       approved_by: role === 'owner' ? user.id : null,
       approved_at: role === 'owner' ? new Date().toISOString() : null,
     })
+    // If owner wants user list, fall through to fetch it
+    if (listAll && role === 'owner') {
+      const { data: allUsers } = await supabase
+        .from('user_roles')
+        .select('*')
+        .order('created_at', { ascending: false })
+      return NextResponse.json({ role, isNew: true, users: allUsers })
+    }
     return NextResponse.json({ role, isNew: true })
   }
 
