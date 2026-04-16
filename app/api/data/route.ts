@@ -141,6 +141,7 @@ export async function POST(request: NextRequest) {
 
   const S = state
   const now = new Date().toISOString()
+  console.log('POST saving: assets=', S.assets?.length, 'liabilities=', S.liabilities?.length, 'categories=', S.categories?.length)
 
   // Save settings
   await supabase.from('settings').upsert({
@@ -158,9 +159,10 @@ export async function POST(request: NextRequest) {
   })
 
   // Save assets
+  // Always delete existing assets, then re-insert if any
+  const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
+  if (delErr) console.error('Asset delete error:', delErr.message)
   if (S.assets?.length) {
-    const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
-    if (delErr) console.error('Asset delete error:', delErr.message)
     const { error: insErr } = await supabase.from('assets').insert(S.assets.map((a: any) => ({
       id: a.id, user_id: userId, type: a.type, name: a.name, owner: a.owner,
       value: a.value || 0, ticker: a.ticker, market: a.market,
