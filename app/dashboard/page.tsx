@@ -62,23 +62,38 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
   async function loadAndInitDashboard() {
     const w = window as any
 
-    // Step 1: Execute dashboard script first (sets up w.S with localStorage data)
+    // Step 1: Pre-set user info so script can access it immediately
+    w._userId = user.id
+    w._userEmail = user.email
+    w._userRole = user.role || 'guest'
+
+    // Execute dashboard script (sets up w.S with localStorage data)
     const script = document.createElement('script')
     script.textContent = DASHBOARD_SCRIPT
     document.body.appendChild(script)
 
     // Step 2: Wait for script to initialise, then load Supabase data on top
-    await new Promise(r => setTimeout(r, 300))
-
-    if (!w.S) {
-      console.error('Dashboard script failed to initialise')
-      return
+    // Retry up to 10 times with 200ms intervals (2 seconds total)
+    let retries = 0
+    while (!w.S && retries < 10) {
+      await new Promise(r => setTimeout(r, 200))
+      retries++
     }
 
-    // Step 3: Set user info
-    w.S._loggedInEmail = user.email
-    w.S._userId = user.id
-    w.S._userRole = user.role || 'guest'
+    if (!w.S) {
+      console.error('Dashboard script failed to initialise after', retries, 'retries')
+      // Try to show something useful
+      document.body.innerHTML += '<div style="padding:40px;font-family:sans-serif;color:red">Dashboard failed to load. Please refresh the page.</div>'
+      return
+    }
+    console.log('Dashboard initialised after', retries * 200, 'ms')
+
+    // Step 3: Confirm user info (already set in step 1)
+    if (w.S) {
+      w.S._loggedInEmail = user.email
+      w.S._userId = user.id
+      w.S._userRole = user.role || 'guest'
+    }
 
     // Step 4: Load from Supabase (overrides localStorage with server truth)
     try {
