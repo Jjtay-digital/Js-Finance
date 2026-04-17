@@ -557,6 +557,7 @@ function toggleHidePage(page){
   syncHideButtons();
   if(page==='monthly')calcSummary();
   if(page==='transactions')filterTx();
+  if(page==='networth')renderNW();
 }
 
 // ── ASSET VALUE ───────────────────────────────────────────────────────────────
