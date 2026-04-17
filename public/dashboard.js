@@ -893,7 +893,7 @@ function updateNWTotals(){
   const nw=totalAssets-totalLiab;
   setEl('assets-total'&&'nw-val',(a=>a)(''));
   setEl('nw-val',hideVal('networth',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw))));
-  setEl('nw-sub',hideVal('networth','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)+' · March 2026'));
+  setEl('nw-sub',hideVal('networth','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)));
   const liquid=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
   setEl('compare-liquid','$'+fmtN(liquid));
   const barEl=getEl('compare-liquid-bar');if(barEl)barEl.style.width=Math.min(liquid/30000*100,100).toFixed(0)+'%';
@@ -1338,16 +1338,16 @@ function renderPeerComparison(){
   const liquid=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
 
   // Use cached peer data or defaults
-  const peer=S.peerData||{sgSalary:5500,sgSavings:30000,sgLoan:280000,updatedAt:null};
+  const peer=S.peerData||{};
 
   // Update age displays
-  document.querySelectorAll('.peer-age-ref').forEach(el=>el.textContent=ageForBench);
-  const ageEl=getEl('peer-age');if(ageEl)ageEl.textContent=ageForBench;
+  document.querySelectorAll('.peer-age-ref').forEach(el=>el.textContent=age===null?'—':ageForBench);
+  const ageEl=getEl('peer-age');if(ageEl)ageEl.textContent=age===null?'—':ageForBench;
 
   // Salary card
   setEl('peer-my-salary',salary>0?'~$'+fmtN(salary):'—');
-  setEl('peer-sg-salary','~$'+fmtN(peer.sgSalary));
-  const salaryPct=salary>0?Math.min(salary/peer.sgSalary*100,130).toFixed(0):0;
+  setEl('peer-sg-salary',peer.sgSalary?'~$'+fmtN(peer.sgSalary):'—');
+  const salaryPct=(salary>0&&peer.sgSalary)?Math.min(salary/peer.sgSalary*100,130).toFixed(0):0;
   const salaryBar=getEl('peer-salary-bar');
   if(salaryBar){salaryBar.style.width=Math.min(salaryPct,100)+'%';salaryBar.style.background=salary>=peer.sgSalary?'var(--green)':'var(--amber)';}
   const salaryNote=getEl('peer-salary-note');
@@ -1355,8 +1355,11 @@ function renderPeerComparison(){
     if(salary<=0){
       salaryNote.textContent='Enter gross monthly salary above or in Settings to compare with SG median.';
       salaryNote.style.color='var(--text3)';
+    }else if(!peer.sgSalary){
+      salaryNote.textContent='Click Refresh Stats to fetch benchmark data for your age group.';
+      salaryNote.style.color='var(--text3)';
     }else{
-      const diff=salary-peer.sgSalary;
+      const diff=peer.sgSalary?(salary-peer.sgSalary):0;
       salaryNote.textContent=diff>=0?'Above median by $'+fmtN(diff)+'/mth':'Below median by $'+fmtN(Math.abs(diff))+'/mth.';
       salaryNote.style.color=diff>=0?'var(--green)':'var(--amber)';
     }
@@ -1364,14 +1367,14 @@ function renderPeerComparison(){
 
   // Savings card
   setEl('compare-liquid','$'+fmtN(liquid));
-  const savPct=Math.min(liquid/peer.sgSavings*100,100).toFixed(0);
+  const savPct=peer.sgSavings?Math.min(liquid/peer.sgSavings*100,100).toFixed(0):0;
   const savBar=getEl('compare-liquid-bar');if(savBar){savBar.style.width=savPct+'%';}
-  setEl('peer-sg-savings','~$'+fmtN(peer.sgSavings));
+  setEl('peer-sg-savings',peer.sgSavings?'~$'+fmtN(peer.sgSavings):'—');
 
   // HDB card
   setEl('peer-my-loan',hdbBalance>0?'$'+fmtN(hdbBalance):'—');
-  setEl('peer-sg-loan','~$'+fmtN(peer.sgLoan));
-  const loanPct=hdbBalance>0?Math.min(hdbBalance/peer.sgLoan*100,130).toFixed(0):0;
+  setEl('peer-sg-loan',peer.sgLoan?'~$'+fmtN(peer.sgLoan):'—');
+  const loanPct=(hdbBalance>0&&peer.sgLoan)?Math.min(hdbBalance/peer.sgLoan*100,130).toFixed(0):0;
   const loanBar=getEl('peer-loan-bar');
   if(loanBar){loanBar.style.width=Math.min(loanPct,100)+'%';loanBar.style.background=hdbBalance>0&&(hdbBalance<=peer.sgLoan)?'var(--green)':'var(--red)';}
 
@@ -1390,7 +1393,13 @@ async function refreshPeerData(){
   const btn=getEl('peer-refresh-btn');
   btn.disabled=true;btn.textContent='Searching...';
   setEl('peer-last-upd','Fetching latest stats...');
-  const age=calcAge()??33;
+  const age=calcAge();
+  if(age===null){
+    setEl('peer-last-upd','Set DOB in profile first');
+    showToast('Add your date of birth in Settings → Family Profiles first',4500);
+    btn.disabled=false;btn.textContent='↻ Refresh Stats';
+    return;
+  }
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',

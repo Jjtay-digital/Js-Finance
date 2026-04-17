@@ -215,7 +215,7 @@ export const DASHBOARD_BODY = `<div id="app">
 <div class="topbar">
   <div class="topbar-left">
     <div class="logo">Jason's <span>Finance</span></div>
-    <span class="period-badge">March 2026</span>
+    
   </div>
   <div class="topbar-right">
     <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
@@ -361,7 +361,7 @@ export const DASHBOARD_BODY = `<div id="app">
 
   <div class="card mb24">
     <div class="card-header">
-      <div><div class="card-title">Peer Comparison</div><div class="card-subtitle" id="peer-subtitle">Singaporeans born 1992 (age 33) &middot; SingStat &amp; CPF Board data</div></div>
+      <div><div class="card-title">Peer Comparison</div><div class="card-subtitle" id="peer-subtitle">Age-based comparison from your profile data &middot; SingStat &amp; CPF Board data</div></div>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="peer-last-upd" id="peer-last-upd"></span>
         <button class="refresh-btn" onclick="refreshPeerData()" id="peer-refresh-btn">&#8635; Refresh Stats</button>
@@ -369,8 +369,8 @@ export const DASHBOARD_BODY = `<div id="app">
     </div>
     <div class="card-body">
       <div class="compare-grid" id="peer-grid">
-        <div class="compare-card"><div class="compare-label">Gross Monthly Salary</div><div class="compare-row"><span class="compare-who">You (from profile)</span><span class="compare-val text-green" id="peer-my-salary">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span id="peer-age">33</span></span><span class="compare-val text-muted" id="peer-sg-salary">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-salary-bar" style="background:var(--green)"></div></div><p id="peer-salary-note" style="font-size:12px;color:var(--text3);margin-top:8px;font-weight:500"></p></div>
-        <div class="compare-card"><div class="compare-label">Liquid Savings</div><div class="compare-row"><span class="compare-who">You (tracked)</span><span class="compare-val text-accent" id="compare-liquid">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span class="peer-age-ref">33</span></span><span class="compare-val text-muted" id="peer-sg-savings">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="compare-liquid-bar" style="width:5%;background:var(--accent)"></div></div></div>
+        <div class="compare-card"><div class="compare-label">Gross Monthly Salary</div><div class="compare-row"><span class="compare-who">You (from profile)</span><span class="compare-val text-green" id="peer-my-salary">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span id="peer-age">—</span></span><span class="compare-val text-muted" id="peer-sg-salary">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-salary-bar" style="background:var(--green)"></div></div><p id="peer-salary-note" style="font-size:12px;color:var(--text3);margin-top:8px;font-weight:500"></p></div>
+        <div class="compare-card"><div class="compare-label">Liquid Savings</div><div class="compare-row"><span class="compare-who">You (tracked)</span><span class="compare-val text-accent" id="compare-liquid">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span class="peer-age-ref">—</span></span><span class="compare-val text-muted" id="peer-sg-savings">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="compare-liquid-bar" style="width:5%;background:var(--accent)"></div></div></div>
         <div class="compare-card"><div class="compare-label">Housing Loan Balance</div><div class="compare-row"><span class="compare-who">You (from liabilities)</span><span class="compare-val text-red" id="peer-my-loan">—</span></div><div class="compare-row"><span class="compare-who">SG median</span><span class="compare-val text-muted" id="peer-sg-loan">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-loan-bar" style="background:var(--red)"></div></div></div>
       </div>
     </div>
