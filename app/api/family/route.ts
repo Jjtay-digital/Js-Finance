@@ -67,6 +67,39 @@ async function findUserByEmail(supabase: any, rawEmail: string) {
   return null
 }
 
+async function resolveInviteeByEmail(db: any, admin: any, rawEmail: string) {
+  const normalized = normalizeEmail(rawEmail)
+  if (!normalized) return null
+
+  const fromRoles = await findUserByEmail(db, normalized)
+  if (fromRoles) return fromRoles
+  if (!admin) return null
+
+  // Fallback: user exists in auth.users but has no user_roles row yet.
+  try {
+    const { data, error } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+    if (error) return null
+    const users = data?.users || []
+    const matched = users.find((u: any) => normalizeEmail(u.email || '') === normalized)
+    if (!matched) return null
+
+    const fullName = matched.user_metadata?.full_name || matched.email || normalized
+    await db.from('user_roles').upsert({
+      user_id: matched.id,
+      email: normalized,
+      full_name: fullName,
+      avatar_url: matched.user_metadata?.avatar_url || null,
+      role: 'guest',
+      approved_by: null,
+      approved_at: null,
+    }, { onConflict: 'user_id' })
+
+    return { user_id: matched.id, full_name: fullName, email: normalized }
+  } catch {
+    return null
+  }
+}
+
 // GET - get my family groups + pending invites + member data for combined view
 export async function GET(request: NextRequest) {
   const supabase = await getSupabase()
@@ -198,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Find user by email in user_roles
-    const invitee = await findUserByEmail(db, normalizedEmail)
+    const invitee = await resolveInviteeByEmail(db, admin, normalizedEmail)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign up first.' }, { status: 404 })
@@ -239,7 +272,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cannot add yourself' }, { status: 400 })
     }
 
-    const invitee = await findUserByEmail(db, email)
+    const invitee = await resolveInviteeByEmail(db, admin, email)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign in first.' }, { status: 404 })
