@@ -1933,7 +1933,11 @@ function closeProfileModal(){getEl('profile-modal').classList.remove('open');}
 async function saveNewProfile(){
   const name=getEl('pm-name').value.trim();
   if(!name){showToast('Enter a name');return;}
-  const email=(getEl('pm-email').value||'').trim().toLowerCase();
+  const email=(getEl('pm-email').value||'')
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g,'')
+    .replace(/\s+/g,'')
+    .trim();
   if(!email){showToast('Email is required to pair family member');return;}
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('Enter a valid email');return;}
   const profile={id:'m_'+Date.now(),name,relation:getEl('pm-relation').value,dob:getEl('pm-dob').value,citizen:getEl('pm-citizen').value,salary:'',employer:'',email};

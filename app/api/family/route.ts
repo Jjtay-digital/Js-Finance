@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -16,10 +17,25 @@ async function getSupabase() {
   )
 }
 
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
+function normalizeEmail(rawEmail: string) {
+  return String(rawEmail || '')
+    .toLowerCase()
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, '')
+    .trim()
+}
+
 async function findUserByEmail(supabase: any, rawEmail: string) {
   const email = String(rawEmail || '').trim()
   if (!email) return null
-  const normalized = email.toLowerCase()
+  const normalized = normalizeEmail(email)
 
   // Try exact normalized match first.
   let { data } = await supabase
@@ -38,7 +54,17 @@ async function findUserByEmail(supabase: any, rawEmail: string) {
     .limit(1)
     .maybeSingle()
 
-  return fallback.data || null
+  if (fallback.data) return fallback.data
+
+  // Last fallback: contains match (helps recover rows with accidental whitespace).
+  const contains = await supabase
+    .from('user_roles')
+    .select('user_id, full_name, email')
+    .ilike('email', `%${normalized}%`)
+    .limit(1)
+
+  if (contains.data && contains.data.length) return contains.data[0]
+  return null
 }
 
 // GET - get my family groups + pending invites + member data for combined view
@@ -129,6 +155,8 @@ export async function GET(request: NextRequest) {
 // POST - create group, invite member, accept/decline invite
 export async function POST(request: NextRequest) {
   const supabase = await getSupabase()
+  const admin = getAdminSupabase()
+  const db = admin || supabase
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
@@ -137,13 +165,16 @@ export async function POST(request: NextRequest) {
 
   if (action === 'create') {
     // Create a new family group
-    const { data: group } = await supabase
+    const { data: group, error: groupErr } = await db
       .from('family_groups')
       .insert({ name: body.name || 'Our Family', created_by: user.id })
       .select().single()
+    if (groupErr || !group) {
+      return NextResponse.json({ error: 'Unable to create group', details: groupErr?.message }, { status: 500 })
+    }
 
     // Add creator as owner member
-    await supabase.from('family_group_members').insert({
+    const { error: ownerErr } = await db.from('family_group_members').insert({
       group_id: group!.id,
       user_id: user.id,
       role: 'owner',
@@ -151,6 +182,9 @@ export async function POST(request: NextRequest) {
       invited_by: user.id,
       accepted_at: new Date().toISOString(),
     })
+    if (ownerErr) {
+      return NextResponse.json({ error: 'Unable to add owner to group', details: ownerErr.message }, { status: 500 })
+    }
 
     return NextResponse.json({ group })
   }
@@ -158,57 +192,60 @@ export async function POST(request: NextRequest) {
   if (action === 'invite') {
     // Invite someone by email
     const { groupId, email } = body
-    const normalizedEmail = String(email || '').trim().toLowerCase()
+    const normalizedEmail = normalizeEmail(String(email || ''))
     if (!groupId || !normalizedEmail) {
       return NextResponse.json({ error: 'Group and email are required' }, { status: 400 })
     }
 
     // Find user by email in user_roles
-    const invitee = await findUserByEmail(supabase, normalizedEmail)
+    const invitee = await findUserByEmail(db, normalizedEmail)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign up first.' }, { status: 404 })
     }
 
     // Check not already in group
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('family_group_members')
       .select('status')
       .eq('group_id', groupId)
       .eq('user_id', invitee.user_id)
-      .single()
+      .maybeSingle()
 
     if (existing) {
       return NextResponse.json({ error: 'Already in group' }, { status: 400 })
     }
 
-    await supabase.from('family_group_members').insert({
+    const { error: inviteErr } = await db.from('family_group_members').insert({
       group_id: groupId,
       user_id: invitee.user_id,
       role: 'member',
       status: 'pending',
       invited_by: user.id,
     })
+    if (inviteErr) {
+      return NextResponse.json({ error: 'Unable to send invite', details: inviteErr.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
   }
 
   if (action === 'pair') {
-    const email = String(body.email || '').trim().toLowerCase()
+    const email = normalizeEmail(String(body.email || ''))
     if (!email) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
-    if ((user.email || '').toLowerCase() === email) {
+    if (normalizeEmail(user.email || '') === email) {
       return NextResponse.json({ error: 'Cannot add yourself' }, { status: 400 })
     }
 
-    const invitee = await findUserByEmail(supabase, email)
+    const invitee = await findUserByEmail(db, email)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign in first.' }, { status: 404 })
     }
 
-    const { data: existingOwnedMembership } = await supabase
+    const { data: existingOwnedMembership } = await db
       .from('family_group_members')
       .select('group_id, role, status')
       .eq('user_id', user.id)
@@ -220,18 +257,21 @@ export async function POST(request: NextRequest) {
     let groupId = existingOwnedMembership?.group_id as string | undefined
 
     if (!groupId) {
-      const { data: newGroup } = await supabase
+      const { data: newGroup, error: newGroupErr } = await db
         .from('family_groups')
         .insert({ name: body.name ? `${body.name}'s Family` : 'Our Family', created_by: user.id })
         .select('id')
         .single()
+      if (newGroupErr || !newGroup) {
+        return NextResponse.json({ error: 'Could not create family group', details: newGroupErr?.message }, { status: 500 })
+      }
 
       groupId = newGroup?.id
       if (!groupId) {
         return NextResponse.json({ error: 'Could not create family group' }, { status: 500 })
       }
 
-      await supabase.from('family_group_members').insert({
+      const { error: ownerErr } = await db.from('family_group_members').insert({
         group_id: groupId,
         user_id: user.id,
         role: 'owner',
@@ -239,9 +279,12 @@ export async function POST(request: NextRequest) {
         invited_by: user.id,
         accepted_at: new Date().toISOString(),
       })
+      if (ownerErr) {
+        return NextResponse.json({ error: 'Could not create owner membership', details: ownerErr.message }, { status: 500 })
+      }
     }
 
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from('family_group_members')
       .select('status')
       .eq('group_id', groupId)
@@ -249,13 +292,16 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (existing) {
-      await supabase
+      const { error: updateErr } = await db
         .from('family_group_members')
         .update({ status: 'accepted', accepted_at: new Date().toISOString(), role: 'member' })
         .eq('group_id', groupId)
         .eq('user_id', invitee.user_id)
+      if (updateErr) {
+        return NextResponse.json({ error: 'Could not update existing family membership', details: updateErr.message }, { status: 500 })
+      }
     } else {
-      await supabase.from('family_group_members').insert({
+      const { error: memberErr } = await db.from('family_group_members').insert({
         group_id: groupId,
         user_id: invitee.user_id,
         role: 'member',
@@ -263,6 +309,9 @@ export async function POST(request: NextRequest) {
         invited_by: user.id,
         accepted_at: new Date().toISOString(),
       })
+      if (memberErr) {
+        return NextResponse.json({ error: 'Could not create family membership', details: memberErr.message }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ ok: true, groupId, targetUserId: invitee.user_id })
@@ -271,13 +320,16 @@ export async function POST(request: NextRequest) {
   if (action === 'respond') {
     // Accept or decline invite
     const { groupId, accept } = body
-    await supabase.from('family_group_members')
+    const { error: respondErr } = await db.from('family_group_members')
       .update({
         status: accept ? 'accepted' : 'declined',
         accepted_at: accept ? new Date().toISOString() : null,
       })
       .eq('group_id', groupId)
       .eq('user_id', user.id)
+    if (respondErr) {
+      return NextResponse.json({ error: 'Unable to update invite response', details: respondErr.message }, { status: 500 })
+    }
 
     return NextResponse.json({ ok: true })
   }
@@ -285,7 +337,7 @@ export async function POST(request: NextRequest) {
   if (action === 'remove') {
     // Remove a member (owner only)
     const { groupId, targetUserId } = body
-    const { data: ownerMembership } = await supabase
+    const { data: ownerMembership } = await db
       .from('family_group_members')
       .select('role, status')
       .eq('group_id', groupId)
@@ -296,10 +348,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only family owner can remove members' }, { status: 403 })
     }
 
-    await supabase.from('family_group_members')
+    const { error: removeErr } = await db.from('family_group_members')
       .delete()
       .eq('group_id', groupId)
       .eq('user_id', targetUserId)
+    if (removeErr) {
+      return NextResponse.json({ error: 'Unable to remove member', details: removeErr.message }, { status: 500 })
+    }
     return NextResponse.json({ ok: true })
   }
 

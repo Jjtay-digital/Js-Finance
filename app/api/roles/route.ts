@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -22,6 +23,13 @@ async function getSupabase() {
   )
 }
 
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
 export async function GET(request: NextRequest) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,11 +43,15 @@ export async function GET(request: NextRequest) {
     .from('user_roles')
     .select('*')
     .eq('user_id', user.id)
-    .single()
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
 
   if (!existingRole) {
     const role = user.email === OWNER_EMAIL ? 'owner' : 'guest'
-    await supabase.from('user_roles').insert({
+    const admin = getAdminSupabase()
+    const writer = admin || supabase
+    const { error: insertErr } = await writer.from('user_roles').insert({
       user_id: user.id,
       email: user.email,
       full_name: user.user_metadata?.full_name || user.email,
@@ -48,9 +60,12 @@ export async function GET(request: NextRequest) {
       approved_by: role === 'owner' ? user.id : null,
       approved_at: role === 'owner' ? new Date().toISOString() : null,
     })
+    if (insertErr) {
+      return NextResponse.json({ error: 'Unable to initialize role', details: insertErr.message }, { status: 500 })
+    }
     // If owner wants user list, fall through to fetch it
     if (listAll && role === 'owner') {
-      const { data: allUsers } = await supabase
+      const { data: allUsers } = await (admin || supabase)
         .from('user_roles')
         .select('*')
         .order('created_at', { ascending: false })
@@ -64,7 +79,8 @@ export async function GET(request: NextRequest) {
     .eq('user_id', user.id)
 
   if (listAll && existingRole.role === 'owner') {
-    const { data: allUsers } = await supabase
+    const admin = getAdminSupabase()
+    const { data: allUsers } = await (admin || supabase)
       .from('user_roles')
       .select('*')
       .order('created_at', { ascending: false })
@@ -94,7 +110,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { data: callerRole } = await supabase
-    .from('user_roles').select('role').eq('user_id', user.id).single()
+    .from('user_roles').select('role').eq('user_id', user.id).maybeSingle()
   if (callerRole?.role !== 'owner')
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
@@ -102,9 +118,18 @@ export async function POST(request: NextRequest) {
   if (!targetUserId || !['owner','partner','guest','blocked'].includes(newRole))
     return NextResponse.json({ error: 'Invalid' }, { status: 400 })
 
-  await supabase.from('user_roles')
+  const admin = getAdminSupabase()
+  const writer = admin || supabase
+  const { error: updateErr } = await writer.from('user_roles')
     .update({ role: newRole, approved_by: user.id, approved_at: new Date().toISOString() })
     .eq('user_id', targetUserId)
+  if (updateErr) {
+    return NextResponse.json({
+      error: 'Failed to update role',
+      details: updateErr.message,
+      hint: 'If RLS blocks this, set SUPABASE_SERVICE_ROLE_KEY for server routes or relax role update policy for owner actions.',
+    }, { status: 500 })
+  }
 
   return NextResponse.json({ ok: true })
 }
