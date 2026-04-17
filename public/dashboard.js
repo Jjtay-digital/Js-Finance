@@ -512,6 +512,9 @@ if(!S.hidePages)S.hidePages={monthly:false,transactions:false,networth:false};
 if(S.hidePages.monthly===undefined)S.hidePages.monthly=false;
 if(S.hidePages.transactions===undefined)S.hidePages.transactions=false;
 if(S.hidePages.networth===undefined)S.hidePages.networth=false;
+if(!S.dataView)S.dataView='my';
+if(!S.familyCombined)S.familyCombined={assets:[],liabilities:[],transactions:[],members:[]};
+if(!S.familyGroupId)S.familyGroupId=null;
 const selfName=(window._userName||window._userEmail||'You').toString();
 const selfEmail=(window._userEmail||'').toString();
 if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
@@ -667,6 +670,9 @@ async function testApiKey() {
 // ── INIT ──────────────────────────────────────────────────────────────────────
 function init(){
   applyTheme();renderProfileTabs();renderProfileSwitcher();renderSettingsAccounts();renderCatSettings();calcSummary();renderBudgets();
+  hydrateBrandName();
+  loadFamilyProfiles();
+  syncDataViewUI();
   rebuildMonthlyChart();
   try{renderNW();}catch(e){console.warn('renderNW:',e);}
   renderTxCurrencyCards();renderTxCurrencyTabs();
@@ -700,8 +706,93 @@ function applyTheme(){
   setEl('theme-btn',d?'☀':'🌙');
   const btn=getEl('theme-toggle-btn'),lbl=getEl('theme-label');
   if(btn)btn.className='toggle'+(d?' on':'');if(lbl)lbl.textContent=d?'On':'Off';
+  applyPalette();
 }
 function toggleTheme(){S.theme=S.theme==='dark'?'light':'dark';saveS();applyTheme();rebuildMonthlyChart();rebuildNWChart();}
+
+const PALETTES={
+  blue:{accent:'#4361ee',accent2:'#3a0ca3'},
+  emerald:{accent:'#0f766e',accent2:'#065f46'},
+  indigo:{accent:'#4f46e5',accent2:'#3730a3'},
+  slate:{accent:'#334155',accent2:'#0f172a'},
+};
+function applyPalette(){
+  const root=document.documentElement;
+  const p=PALETTES[S.palette]||PALETTES.blue;
+  root.style.setProperty('--accent',p.accent);
+  root.style.setProperty('--accent2',p.accent2);
+  const sel=getEl('palette-select');
+  if(sel)sel.value=S.palette||'blue';
+}
+function setPalette(name){
+  S.palette=PALETTES[name]?name:'blue';
+  saveS();
+  applyPalette();
+  rebuildMonthlyChart();
+  rebuildNWChart();
+}
+function hydrateBrandName(){
+  const brand=getEl('brand-name');
+  if(!brand)return;
+  const raw=(window._userName||'').trim();
+  const first=raw.split(/\s+/)[0]||'My';
+  brand.textContent=first+"'s";
+}
+function isFamilyView(){return S.dataView==='family';}
+function getViewAssets(){return isFamilyView()?(S.familyCombined?.assets||[]):(S.assets||[]);}
+function getViewLiabilities(){return isFamilyView()?(S.familyCombined?.liabilities||[]):(S.liabilities||[]);}
+function getViewTransactions(){return isFamilyView()?(S.familyCombined?.transactions||[]):(window.TRANSACTIONS||[]);}
+function syncDataViewUI(){
+  ['nw','tx'].forEach(sfx=>{
+    const myBtn=getEl('view-my-btn-'+sfx),famBtn=getEl('view-family-btn-'+sfx);
+    if(myBtn)myBtn.classList.toggle('active',S.dataView!=='family');
+    if(famBtn)famBtn.classList.toggle('active',S.dataView==='family');
+  });
+}
+async function ensureFamilyCombinedData(){
+  if(!S.familyGroupId){
+    const groupsRes=await fetch('/api/family');
+    if(!groupsRes.ok)throw new Error('No family group found');
+    const groupsData=await groupsRes.json();
+    const first=(groupsData.groups||[])[0];
+    S.familyGroupId=first?.group_id||first?.family_groups?.id||null;
+    saveS();
+  }
+  if(!S.familyGroupId)throw new Error('No family group found');
+  const res=await fetch('/api/family?action=combined&groupId='+encodeURIComponent(S.familyGroupId));
+  if(!res.ok){
+    const d=await res.json().catch(()=>({}));
+    throw new Error(d.error||'Could not load combined data');
+  }
+  const data=await res.json();
+  S.familyCombined={
+    assets:Array.isArray(data.assets)?data.assets:[],
+    liabilities:Array.isArray(data.liabilities)?data.liabilities:[],
+    transactions:Array.isArray(data.transactions)?data.transactions:[],
+    members:Array.isArray(data.members)?data.members:[],
+  };
+  saveS();
+}
+async function setDataView(mode){
+  if(mode==='family'){
+    try{
+      await ensureFamilyCombinedData();
+      S.dataView='family';
+      showToast('Family combined view enabled');
+    }catch(e){
+      S.dataView='my';
+      showToast((e&&e.message)?e.message:'No family data available');
+    }
+  }else{
+    S.dataView='my';
+    showToast('My view enabled');
+  }
+  saveS();
+  syncDataViewUI();
+  renderNW();
+  filterTx();
+  rebuildNWChart();
+}
 
 // ── PAGES ─────────────────────────────────────────────────────────────────────
 function showPage(name,tab){
@@ -766,19 +857,22 @@ function deleteBudget(){if(editBudgetIdx===null)return;S.budgets.splice(editBudg
 
 // ── NET WORTH RENDER ──────────────────────────────────────────────────────────
 function renderNW(){
+  const familyView=isFamilyView();
+  const assets=getViewAssets();
+  const liabilities=getViewLiabilities();
   // BANK
-  const banks=S.assets.filter(a=>a.type==='bank');
+  const banks=assets.filter(a=>a.type==='bank');
   const bankTotal=banks.reduce((s,a)=>s+assetVal(a),0);
   setEl('bank-subtotal',showAmt('bank','$'+fmt(bankTotal)));
   getEl('bank-body').innerHTML=banks.length?banks.map(a=>
     '<tr><td class="fw6">'+a.name+'</td>'+
     '<td style="color:var(--text3);font-size:13px">'+a.owner+'</td>'+
-    '<td style="text-align:right">'+(sectionHidden('bank')?showAmt('bank','$'+fmt(a.value)):inlineVal('bank',a.id,'value',a.value,'$'+fmt(a.value)))+'</td>'+
-    '<td>'+(a.locked?'<span class="text-muted" style="font-size:11px">From stmt</span>':eBtn(a.id))+'</td></tr>'
+    '<td style="text-align:right">'+(sectionHidden('bank')?showAmt('bank','$'+fmt(a.value)):(familyView?'$'+fmt(a.value):inlineVal('bank',a.id,'value',a.value,'$'+fmt(a.value))))+'</td>'+
+    '<td>'+(familyView?'<span class="text-muted" style="font-size:11px">Read-only</span>':(a.locked?'<span class="text-muted" style="font-size:11px">From stmt</span>':eBtn(a.id)))+'</td></tr>'
   ).join(''):'<tr><td colspan="4"><div class="empty-state">No bank accounts added</div></td></tr>';
 
   // INVESTMENTS — VALUE CALCULATED FROM SHARES x PRICE
-  const invests=S.assets.filter(a=>a.type==='stock'||a.type==='etf');
+  const invests=assets.filter(a=>a.type==='stock'||a.type==='etf');
   const investTotal=invests.reduce((s,a)=>s+assetVal(a),0);
   setEl('invest-subtotal',showAmt('invest','$'+fmt(investTotal)));
   setEl('fx-rate',fmt(parseFloat(S.usdSgd)||1.34,4));
@@ -798,31 +892,31 @@ function renderNW(){
     return '<tr>'+
       '<td><div class="fw7">'+a.name+'</div><div style="font-size:12px;color:var(--text3)">'+a.ticker+'</div></td>'+
       '<td><span class="badge '+(a.type==='etf'?'badge-purple':'badge-green')+'">'+(a.type==='etf'?'ETF':'Stock')+'</span></td>'+
-      '<td>'+(sectionHidden('invest')?showAmt('invest',shares||'0'):inlineVal('invest',a.id,'shares',shares,shares||'0'))+'</td>'+
-      '<td>'+(sectionHidden('invest')?showAmt('invest',cost?'$'+cost.toFixed(2):'—'):inlineVal('invest',a.id,'cost',cost,cost?'$'+cost.toFixed(2):'—'))+'</td>'+
+      '<td>'+(sectionHidden('invest')?showAmt('invest',shares||'0'):(familyView?(shares||'0'):inlineVal('invest',a.id,'shares',shares,shares||'0')))+'</td>'+
+      '<td>'+(sectionHidden('invest')?showAmt('invest',cost?'$'+cost.toFixed(2):'—'):(familyView?(cost?'$'+cost.toFixed(2):'—'):inlineVal('invest',a.id,'cost',cost,cost?'$'+cost.toFixed(2):'—')))+'</td>'+
       '<td class="mono" style="font-size:13px">'+priceDisp+'<div class="price-tag">'+a.market+' · live</div></td>'+
       '<td class="mono fw6 text-green" style="text-align:right">'+valDisp+'</td>'+
       '<td>'+plDisp+'</td>'+
-      '<td>'+eBtn(a.id)+'</td></tr>';
+      '<td>'+(familyView?'<span class="text-muted" style="font-size:11px">Read-only</span>':eBtn(a.id))+'</td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty-state">No investments added</div></td></tr>';
 
   // CPF
-  const cpfs=S.assets.filter(a=>a.type==='cpf');
+  const cpfs=assets.filter(a=>a.type==='cpf');
   const cpfTotal=cpfs.reduce((s,a)=>s+assetVal(a),0);
   setEl('cpf-subtotal',showAmt('cpf','$'+fmt(cpfTotal)));
   getEl('cpf-body').innerHTML=cpfs.length?cpfs.map(a=>{
     const total=(parseFloat(a.cpfOA)||0)+(parseFloat(a.cpfSA)||0)+(parseFloat(a.cpfMA)||0);
     return '<tr>'+
       '<td class="fw6">'+a.owner+'</td>'+
-      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfOA||0)):inlineVal('cpf',a.id,'cpfOA',a.cpfOA,'$'+fmt(a.cpfOA||0),'text-accent'))+'</td>'+
-      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfSA||0)):inlineVal('cpf',a.id,'cpfSA',a.cpfSA,'$'+fmt(a.cpfSA||0),''))+'</td>'+
-      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfMA||0)):inlineVal('cpf',a.id,'cpfMA',a.cpfMA,'$'+fmt(a.cpfMA||0),''))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfOA||0)):(familyView?'$'+fmt(a.cpfOA||0):inlineVal('cpf',a.id,'cpfOA',a.cpfOA,'$'+fmt(a.cpfOA||0),'text-accent')))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfSA||0)):(familyView?'$'+fmt(a.cpfSA||0):inlineVal('cpf',a.id,'cpfSA',a.cpfSA,'$'+fmt(a.cpfSA||0),'')))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfMA||0)):(familyView?'$'+fmt(a.cpfMA||0):inlineVal('cpf',a.id,'cpfMA',a.cpfMA,'$'+fmt(a.cpfMA||0),'')))+'</td>'+
       '<td class="mono fw6 text-green" style="text-align:right">'+showAmt('cpf','$'+fmt(total))+'</td>'+
-      '<td>'+eBtn(a.id)+'</td></tr>';
+      '<td>'+(familyView?'<span class="text-muted" style="font-size:11px">Read-only</span>':eBtn(a.id))+'</td></tr>';
   }).join(''):'<tr><td colspan="6"><div class="empty-state">No CPF added</div></td></tr>';
 
   // PROPERTY & OTHER — with include/exclude toggle per row
-  const others=S.assets.filter(a=>a.type==='property'||a.type==='other');
+  const others=assets.filter(a=>a.type==='property'||a.type==='other');
   const otherTotalForDisplay=others.reduce((s,a)=>{const raw=parseFloat(a.value)||0;const share=a.myShare!=null?parseFloat(a.myShare):1;return s+(isNaN(raw*share)?0:raw*share);},0);
   const otherTotalInNW=others.reduce((s,a)=>s+assetVal(a),0);
   setEl('other-subtotal',showAmt('other','$'+fmt(otherTotalForDisplay)));
@@ -839,17 +933,17 @@ function renderNW(){
       '<td><span class="badge '+(typeCls[sub]||'')+'">'+typeLabels[sub]+'</span></td>'+
       '<td style="color:var(--text3);font-size:13px">'+a.owner+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+a.notes+'</td>'+
-      '<td style="text-align:right">'+(sectionHidden('other')?showAmt('other',valDisp):inlineVal('other',a.id,'value',raw,valDisp))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('other')?showAmt('other',valDisp):(familyView?valDisp:inlineVal('other',a.id,'value',raw,valDisp)))+'</td>'+
       '<td class="mono fw6 '+(inc?'text-green':'text-muted')+'" style="text-align:right">'+showAmt('other',shareDisp)+'</td>'+
-      '<td style="text-align:center"><button class="toggle-sm'+(inc?' on':'')+'" data-id="'+a.id+'" onclick="togglePropertyNW(this)" title="'+(inc?'Included in NW':'Excluded from NW')+'"></button><div style="font-size:10px;margin-top:4px;color:var(--text3)">'+(inc?'Included':'Excluded')+'</div></td>'+
-      '<td>'+eBtn(a.id)+'</td></tr>';
+      '<td style="text-align:center">'+(familyView?('<div style="font-size:10px;color:var(--text3)">'+(inc?'Included':'Excluded')+'</div>'):('<button class="toggle-sm'+(inc?' on':'')+'" data-id="'+a.id+'" onclick="togglePropertyNW(this)" title="'+(inc?'Included in NW':'Excluded from NW')+'"></button><div style="font-size:10px;margin-top:4px;color:var(--text3)">'+(inc?'Included':'Excluded')+'</div>'))+'</td>'+
+      '<td>'+(familyView?'<span class="text-muted" style="font-size:11px">Read-only</span>':eBtn(a.id))+'</td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty-state">No property or other assets</div></td></tr>';
 
   // LIABILITIES
   const debitDisp=v=>({'cpf-oa':'CPF OA','cpf-sa':'CPF SA','cpf-ma':'CPF MA','bank-dbs':'DBS','bank-uob':'UOB','bank-ocbc':'OCBC'}[v]||v||'—');
-  const liabTotal=S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const liabTotal=liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   setEl('liab-total',showAmt('liab','$'+fmt(liabTotal)));
-  getEl('liab-body').innerHTML=S.liabilities.length?S.liabilities.map(l=>{
+  getEl('liab-body').innerHTML=liabilities.length?liabilities.map(l=>{
     const hasShare=l.myShare!=null&&l.myShare<1;
     const amtDisp=hasShare&&l.fullAmount?
       '<div class="mono fw6 text-red">$'+fmt(l.amount)+'</div><div style="font-size:11px;color:var(--text3)">'+(l.myShare*100).toFixed(0)+'% of $'+fmt(l.fullAmount)+'</div>':
@@ -863,7 +957,7 @@ function renderNW(){
       '<td style="font-size:13px;color:var(--text3)">'+l.freq+'</td>'+
       '<td style="text-align:right">'+(sectionHidden('liab')?showAmt('liab','$'+fmt(l.amount)):amtDisp)+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+l.notes+'</td>'+
-      '<td>'+lBtn(l.id)+'</td></tr>';
+      '<td>'+(familyView?'<span class="text-muted" style="font-size:11px">Read-only</span>':lBtn(l.id))+'</td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty-state">No liabilities</div></td></tr>';
 
   updateNWTotals();
@@ -884,20 +978,22 @@ function togglePropertyNW(btn){
 
 // ── NW TOTALS ─────────────────────────────────────────────────────────────────
 function updateNWTotals(){
-  const bankAssets=sectionIncluded('bank')?S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+(parseFloat(a.value)||0),0):0;
-  const investAssets=sectionIncluded('invest')?S.assets.filter(a=>a.type==='stock'||a.type==='etf').reduce((s,a)=>s+assetVal(a),0):0;
-  const cpfAssets=sectionIncluded('cpf')&&S.includeCPFinNW?S.assets.filter(a=>a.type==='cpf').reduce((s,a)=>s+(parseFloat(a.cpfOA)||0)+(parseFloat(a.cpfSA)||0)+(parseFloat(a.cpfMA)||0),0):0;
-  const otherAssets=sectionIncluded('other')?S.assets.filter(a=>a.type==='property'||a.type==='other').reduce((s,a)=>s+assetVal(a),0):0;
+  const assets=getViewAssets();
+  const liabilities=getViewLiabilities();
+  const bankAssets=sectionIncluded('bank')?assets.filter(a=>a.type==='bank').reduce((s,a)=>s+(parseFloat(a.value)||0),0):0;
+  const investAssets=sectionIncluded('invest')?assets.filter(a=>a.type==='stock'||a.type==='etf').reduce((s,a)=>s+assetVal(a),0):0;
+  const cpfAssets=sectionIncluded('cpf')&&S.includeCPFinNW?assets.filter(a=>a.type==='cpf').reduce((s,a)=>s+(parseFloat(a.cpfOA)||0)+(parseFloat(a.cpfSA)||0)+(parseFloat(a.cpfMA)||0),0):0;
+  const otherAssets=sectionIncluded('other')?assets.filter(a=>a.type==='property'||a.type==='other').reduce((s,a)=>s+assetVal(a),0):0;
   const totalAssets=bankAssets+investAssets+cpfAssets+otherAssets;
-  const totalLiab=sectionIncluded('liab')?S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0):0;
+  const totalLiab=sectionIncluded('liab')?liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0):0;
   const nw=totalAssets-totalLiab;
   setEl('assets-total'&&'nw-val',(a=>a)(''));
   setEl('nw-val',hideVal('networth',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw))));
   setEl('nw-sub',hideVal('networth','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)));
-  const liquid=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
+  const liquid=assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
   setEl('compare-liquid','$'+fmtN(liquid));
   const barEl=getEl('compare-liquid-bar');if(barEl)barEl.style.width=Math.min(liquid/30000*100,100).toFixed(0)+'%';
-  const hdbL=S.liabilities.find(l=>l.id==='hdb-loan');
+  const hdbL=liabilities.find(l=>l.id==='hdb-loan');
   const noteEl=getEl('hdb-note');
   if(hdbL&&noteEl){
     const rem=parseFloat(hdbL.fullAmount)||342589.47;
@@ -1502,11 +1598,13 @@ function rebuildMonthlyChart(){
 }
 function rebuildNWChart(){
   const ctx=getEl('nwBarChart');if(!ctx)return;
-  const bankV=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
-  const invV=S.assets.filter(a=>a.type==='stock'||a.type==='etf').reduce((s,a)=>s+assetVal(a),0);
-  const cpfV=S.assets.filter(a=>a.type==='cpf').reduce((s,a)=>s+assetVal(a),0);
-  const othV=S.assets.filter(a=>a.type==='property'||a.type==='other').reduce((s,a)=>s+assetVal(a),0);
-  const liabV=S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const assets=getViewAssets();
+  const liabilities=getViewLiabilities();
+  const bankV=assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
+  const invV=assets.filter(a=>a.type==='stock'||a.type==='etf').reduce((s,a)=>s+assetVal(a),0);
+  const cpfV=assets.filter(a=>a.type==='cpf').reduce((s,a)=>s+assetVal(a),0);
+  const othV=assets.filter(a=>a.type==='property'||a.type==='other').reduce((s,a)=>s+assetVal(a),0);
+  const liabV=liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
   if(nwChart)nwChart.destroy();
   nwChart=new Chart(ctx,{type:'bar',data:{labels:['Bank & Cash','Investments','CPF','Property & Other','Liabilities'],datasets:[{data:[bankV,invV,cpfV,othV,-liabV],backgroundColor:['#06d6a0','#4361ee','#f9a825','#0096c7','#ef233c'],borderRadius:8,borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{grid:{color:gc()},ticks:{color:tc(),font:{family:'JetBrains Mono',size:11},callback:v=>'$'+v.toLocaleString()}},x:{grid:{display:false},ticks:{color:tc(),font:{family:'Outfit',size:12,weight:'600'}}}}}});
 }
@@ -1527,12 +1625,13 @@ function txToTimestamp(tx){
   return new Date(parseInt(m[2],10),MM[m[1]],parseInt(d[1],10)).getTime();
 }
 function filterTx(){
+  const txSource=getViewTransactions();
   const search=getEl('tx-search').value.toLowerCase().trim();
   const monthSel=getEl('tx-month-sel')?getEl('tx-month-sel').value:'all';
   const yearSel=getEl('tx-year-sel')?getEl('tx-year-sel').value:'all';
   const type=getEl('tx-type').value,cat=getEl('tx-cat-filter').value;
   const MN={1:'Jan',2:'Feb',3:'Mar',4:'Apr',5:'May',6:'Jun',7:'Jul',8:'Aug',9:'Sep',10:'Oct',11:'Nov',12:'Dec'};
-  const filtered=TRANSACTIONS.filter(t=>{
+  const filtered=txSource.filter(t=>{
     if(monthSel!=='all'){const mn=MN[parseInt(monthSel)];if(!t.month.startsWith(mn))return false;}
     if(yearSel!=='all'&&!t.month.endsWith(yearSel))return false;
     if(type!=='all'&&getTxEffectiveType(t)!==type)return false;
@@ -1572,8 +1671,10 @@ function filterTx(){
         :(isDark?'#f87171':'#dc2626');
     // Category badge with icon and colour
     const badge=catBadgeHTML(tx.category);
-    const catWrap='<div class="cat-badge-wrap"><span class="cat-badge-inner">'+badge+'</span>'+
-      '<select data-id="'+tx.id+'" onchange="changeCat(this)">'+buildCatOpts(tx.category)+'</select></div>';
+    const catWrap=isFamilyView()
+      ?'<span class="cat-badge-inner">'+badge+'</span>'
+      :('<div class="cat-badge-wrap"><span class="cat-badge-inner">'+badge+'</span>'+
+      '<select data-id="'+tx.id+'" onchange="changeCat(this)">'+buildCatOpts(tx.category)+'</select></div>');
     html+='<tr>'+
       '<td class="mono text-muted" style="font-size:12px">'+tx.date+'</td>'+
       '<td><span class="type-dot '+dc+'"></span>'+uf+'<span style="font-weight:600">'+tx.desc+'</span></td>'+
@@ -1706,7 +1807,7 @@ function renderProfileTabs(){
     return '<div class="profile-panel'+(i===0?' active':'')+'" id="pp-'+i+'">'+
       '<div class="profile-grid">'+fi('name','Full Name',p.name,'')+fi('relation','Relation',p.relation,'')+fi('dob','Date of Birth',p.dob,'date')+
       '<div class="form-group"><label class="form-label">Nationality</label><select class="form-select" data-pi="'+i+'" data-pk="citizen" onchange="updP(this)"><option value="sc"'+(p.citizen==='sc'?' selected':'')+'>Singapore Citizen</option><option value="pr"'+(p.citizen==='pr'?' selected':'')+'>Singapore PR</option><option value="other"'+(p.citizen==='other'?' selected':'')+'>Other</option></select></div>'+
-      fi('salary','Gross Monthly Salary',p.salary,'number')+fi('employer','Employer',p.employer,'')+'</div>'+
+      fi('salary','Gross Monthly Salary',p.salary,'number')+fi('employer','Employer',p.employer,'')+fi('email','Email',p.email,'email')+'</div>'+
       (i>0?'<button class="btn danger" data-pi="'+i+'" onclick="removeProfile(parseInt(this.dataset.pi))">Remove '+p.name.split(' ')[0]+'</button>':'')+'</div>';
   }).join('');
 }
@@ -1729,10 +1830,76 @@ function updP(el){
     calcCPF();
   }
 }
-function openAddProfileModal(){getEl('pm-name').value='';getEl('pm-dob').value='';getEl('profile-modal').classList.add('open');}
+function openAddProfileModal(){getEl('pm-name').value='';getEl('pm-dob').value='';getEl('pm-email').value='';getEl('profile-modal').classList.add('open');}
 function closeProfileModal(){getEl('profile-modal').classList.remove('open');}
-function saveNewProfile(){const name=getEl('pm-name').value.trim();if(!name){showToast('Enter a name');return;}S.profiles.push({id:'m_'+Date.now(),name,relation:getEl('pm-relation').value,dob:getEl('pm-dob').value,citizen:getEl('pm-citizen').value,salary:'',employer:'',email:''});saveS();closeProfileModal();renderProfileTabs();showToast(name+' added');}
-function removeProfile(i){S.profiles.splice(i,1);saveS();renderProfileTabs();}
+async function saveNewProfile(){
+  const name=getEl('pm-name').value.trim();
+  if(!name){showToast('Enter a name');return;}
+  const email=(getEl('pm-email').value||'').trim().toLowerCase();
+  const profile={id:'m_'+Date.now(),name,relation:getEl('pm-relation').value,dob:getEl('pm-dob').value,citizen:getEl('pm-citizen').value,salary:'',employer:'',email};
+  S.profiles.push(profile);
+  saveS();
+  if(email){
+    try{
+      const r=await fetch('/api/family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pair',email,name})});
+      const d=await r.json();
+      if(r.ok){
+        profile.familyGroupId=d.groupId;
+        profile.familyUserId=d.targetUserId;
+        saveS();
+        showToast('Paired with '+email);
+      }else{
+        showToast(d.error||'Could not pair by email');
+      }
+    }catch(e){
+      showToast('Pairing failed, profile saved locally');
+    }
+  }
+  closeProfileModal();
+  renderProfileTabs();
+  showToast(name+' added');
+}
+async function removeProfile(i){
+  const p=S.profiles[i];
+  if(!p)return;
+  if(p.familyGroupId&&p.familyUserId){
+    try{
+      await fetch('/api/family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'remove',groupId:p.familyGroupId,targetUserId:p.familyUserId})});
+    }catch(e){}
+  }
+  S.profiles.splice(i,1);saveS();renderProfileTabs();
+}
+
+async function loadFamilyProfiles(){
+  try{
+    const r=await fetch('/api/family');
+    if(!r.ok)return;
+    const d=await r.json();
+    const firstGroup=(d.groups||[])[0];
+    if(firstGroup)S.familyGroupId=firstGroup.group_id||firstGroup.family_groups?.id||S.familyGroupId;
+    const members=(d.members||[]).filter(m=>m.user_id!==window._userId);
+    members.forEach(m=>{
+      const info=m.user_roles||{};
+      if(!info.email)return;
+      const exists=S.profiles.some(p=>p.familyUserId===m.user_id||((p.email||'').toLowerCase()===info.email.toLowerCase()));
+      if(exists)return;
+      S.profiles.push({
+        id:'fam_'+m.user_id,
+        name:info.full_name||info.email,
+        relation:'Family',
+        dob:'',
+        citizen:'sc',
+        salary:'',
+        employer:'',
+        email:info.email,
+        familyGroupId:m.group_id,
+        familyUserId:m.user_id,
+      });
+    });
+    saveS();
+    renderProfileTabs();
+  }catch(e){}
+}
 function populateOwnerSelect(id,selected){getEl(id).innerHTML=S.profiles.map(p=>'<option'+(p.name===selected?' selected':'')+'>'+p.name+' ('+p.relation+')</option>').join('');}
 
 init();

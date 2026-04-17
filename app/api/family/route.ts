@@ -168,6 +168,85 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === 'pair') {
+    const email = String(body.email || '').trim().toLowerCase()
+    if (!email) {
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
+    }
+    if ((user.email || '').toLowerCase() === email) {
+      return NextResponse.json({ error: 'Cannot add yourself' }, { status: 400 })
+    }
+
+    const { data: invitee } = await supabase
+      .from('user_roles')
+      .select('user_id, full_name, email')
+      .eq('email', email)
+      .single()
+
+    if (!invitee) {
+      return NextResponse.json({ error: 'User not found. They need to sign in first.' }, { status: 404 })
+    }
+
+    const { data: existingOwnedMembership } = await supabase
+      .from('family_group_members')
+      .select('group_id, role, status')
+      .eq('user_id', user.id)
+      .eq('role', 'owner')
+      .eq('status', 'accepted')
+      .limit(1)
+      .maybeSingle()
+
+    let groupId = existingOwnedMembership?.group_id as string | undefined
+
+    if (!groupId) {
+      const { data: newGroup } = await supabase
+        .from('family_groups')
+        .insert({ name: body.name ? `${body.name}'s Family` : 'Our Family', created_by: user.id })
+        .select('id')
+        .single()
+
+      groupId = newGroup?.id
+      if (!groupId) {
+        return NextResponse.json({ error: 'Could not create family group' }, { status: 500 })
+      }
+
+      await supabase.from('family_group_members').insert({
+        group_id: groupId,
+        user_id: user.id,
+        role: 'owner',
+        status: 'accepted',
+        invited_by: user.id,
+        accepted_at: new Date().toISOString(),
+      })
+    }
+
+    const { data: existing } = await supabase
+      .from('family_group_members')
+      .select('status')
+      .eq('group_id', groupId)
+      .eq('user_id', invitee.user_id)
+      .maybeSingle()
+
+    if (existing) {
+      await supabase
+        .from('family_group_members')
+        .update({ status: 'accepted', accepted_at: new Date().toISOString(), role: 'member' })
+        .eq('group_id', groupId)
+        .eq('user_id', invitee.user_id)
+    } else {
+      await supabase.from('family_group_members').insert({
+        group_id: groupId,
+        user_id: invitee.user_id,
+        role: 'member',
+        status: 'accepted',
+        invited_by: user.id,
+        accepted_at: new Date().toISOString(),
+      })
+    }
+
+    return NextResponse.json({ ok: true, groupId, targetUserId: invitee.user_id })
+  }
+
   if (action === 'respond') {
     // Accept or decline invite
     const { groupId, accept } = body
@@ -185,6 +264,17 @@ export async function POST(request: NextRequest) {
   if (action === 'remove') {
     // Remove a member (owner only)
     const { groupId, targetUserId } = body
+    const { data: ownerMembership } = await supabase
+      .from('family_group_members')
+      .select('role, status')
+      .eq('group_id', groupId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!ownerMembership || ownerMembership.role !== 'owner' || ownerMembership.status !== 'accepted') {
+      return NextResponse.json({ error: 'Only family owner can remove members' }, { status: 403 })
+    }
+
     await supabase.from('family_group_members')
       .delete()
       .eq('group_id', groupId)

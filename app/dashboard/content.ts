@@ -214,7 +214,7 @@ body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font
 export const DASHBOARD_BODY = `<div id="app">
 <div class="topbar">
   <div class="topbar-left">
-    <div class="logo">Jason's <span>Finance</span></div>
+    <div class="logo"><span id="brand-name">My</span> Finance</div>
     
   </div>
   <div class="topbar-right">
@@ -293,6 +293,10 @@ export const DASHBOARD_BODY = `<div id="app">
   </div>
   <div class="refresh-row" style="justify-content:space-between">
     <div style="display:flex;align-items:center;gap:10px">
+      <div class="profile-switcher" id="view-switcher-nw">
+        <button class="profile-switcher-btn active" id="view-my-btn-nw" onclick="setDataView('my')">My View</button>
+        <button class="profile-switcher-btn" id="view-family-btn-nw" onclick="setDataView('family')">Family Combined</button>
+      </div>
       <button class="refresh-btn" id="refresh-btn" onclick="fetchAllPrices()">&#8635; Refresh Prices</button>
       <span class="last-upd" id="last-upd"></span>
     </div>
@@ -381,6 +385,10 @@ export const DASHBOARD_BODY = `<div id="app">
 <!-- TRANSACTIONS -->
 <div class="page" id="page-transactions">
   <div class="tx-controls">
+    <div class="profile-switcher" id="view-switcher-tx">
+      <button class="profile-switcher-btn active" id="view-my-btn-tx" onclick="setDataView('my')">My View</button>
+      <button class="profile-switcher-btn" id="view-family-btn-tx" onclick="setDataView('family')">Family Combined</button>
+    </div>
     <input type="text" class="tx-search" placeholder="Search description, source, category or amount..." id="tx-search" oninput="filterTx()">
     <select class="select-ctrl" id="tx-month-sel" onchange="filterTx()">
       <option value="all">All Months</option>
@@ -436,6 +444,7 @@ export const DASHBOARD_BODY = `<div id="app">
     <div class="settings-section">
       <div class="settings-title">Display</div>
       <div class="setting-row"><div><div class="setting-name">Dark Mode</div><div class="setting-desc">Switch between light and dark theme</div></div><div class="toggle-wrap"><span class="toggle-label" id="theme-label">Off</span><button class="toggle" id="theme-toggle-btn" onclick="toggleTheme()"></button></div></div>
+      <div class="setting-row"><div><div class="setting-name">Color Theme</div><div class="setting-desc">Choose a professional accent palette</div></div><select class="form-select" id="palette-select" onchange="setPalette(this.value)" style="width:220px"><option value="blue">Royal Blue</option><option value="emerald">Emerald</option><option value="indigo">Indigo</option><option value="slate">Slate</option></select></div>
     </div>
     <div class="settings-section">
       <div class="settings-title">Accounts Status <span style="font-size:12px;font-weight:500;color:var(--text3)">From your own assets and liabilities only</span></div>
@@ -600,6 +609,7 @@ export const DASHBOARD_BODY = `<div id="app">
   <div class="modal" style="width:420px"><h3>Add Family Member</h3><p>Add a profile.</p>
     <div class="modal-2col">
       <div class="modal-field"><label>Full Name</label><input type="text" id="pm-name"></div>
+      <div class="modal-field"><label>Email (optional)</label><input type="email" id="pm-email" placeholder="member@gmail.com"></div>
       <div class="modal-field"><label>Relation</label><select id="pm-relation"><option>Wife</option><option>Husband</option><option>Child</option><option>Parent</option><option>Other</option></select></div>
       <div class="modal-field"><label>Date of Birth</label><input type="date" id="pm-dob"></div>
       <div class="modal-field"><label>Nationality</label><select id="pm-citizen"><option value="sc">Singapore Citizen</option><option value="pr">Singapore PR</option><option value="other">Other</option></select></div>
