@@ -125,11 +125,12 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
             if (w.loadApiKeyDisplay)  w.loadApiKeyDisplay()
             if (w.loadAlphaKeyDisplay) w.loadAlphaKeyDisplay()
           }
-          w.__dashboardHydrated = true
         })
-        .catch(() => {
-          // If fetch fails, keep sync disabled to avoid wiping server state.
-          w.__dashboardHydrated = false
+        .catch(() => {})
+        .finally(() => {
+          // Re-enable syncing after first load attempt so user edits can save.
+          // Server-side route must remain the final guard against destructive payloads.
+          w.__dashboardHydrated = true
         })
 
       // 4. Show user info
