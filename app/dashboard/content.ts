@@ -218,6 +218,12 @@ export const DASHBOARD_BODY = `<div id="app">
     
   </div>
   <div class="topbar-right">
+    <select class="select-ctrl" id="palette-select-top" onchange="setPalette(this.value)" style="font-size:12px;padding:6px 10px">
+      <option value="blue">Blue</option>
+      <option value="emerald">Emerald</option>
+      <option value="indigo">Indigo</option>
+      <option value="slate">Slate</option>
+    </select>
     <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
   </div>
 </div>

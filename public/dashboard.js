@@ -515,23 +515,6 @@ if(S.hidePages.networth===undefined)S.hidePages.networth=false;
 if(!S.dataView)S.dataView='my';
 if(!S.familyCombined)S.familyCombined={assets:[],liabilities:[],transactions:[],members:[]};
 if(!S.familyGroupId)S.familyGroupId=null;
-if(S.cleanedDefaultCats!==true){
-  S.categories=[...DEFAULT_CATS];
-  if(Array.isArray(window.TRANSACTIONS)){
-    window.TRANSACTIONS.forEach(t=>{
-      if(t&&t.category&&!DEFAULT_CATS.includes(t.category))t.category='Unknown';
-    });
-  }
-  if(S.catOverrides){
-    Object.keys(S.catOverrides).forEach(k=>{
-      if(!DEFAULT_CATS.includes(S.catOverrides[k]))delete S.catOverrides[k];
-    });
-  }
-  if(Array.isArray(S.budgets)){
-    S.budgets=S.budgets.filter(b=>DEFAULT_CATS.includes(b.category));
-  }
-  S.cleanedDefaultCats=true;
-}
 const selfName=(window._userName||window._userEmail||'You').toString();
 const selfEmail=(window._userEmail||'').toString();
 if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
@@ -740,6 +723,8 @@ function applyPalette(){
   root.style.setProperty('--accent2',p.accent2);
   const sel=getEl('palette-select');
   if(sel)sel.value=S.palette||'blue';
+  const topSel=getEl('palette-select-top');
+  if(topSel)topSel.value=S.palette||'blue';
 }
 function setPalette(name){
   S.palette=PALETTES[name]?name:'blue';
@@ -751,7 +736,10 @@ function setPalette(name){
 function hydrateBrandName(){
   const brand=getEl('brand-name');
   if(!brand)return;
-  const raw=(window._userName||'').trim();
+  const rawName=(window._userName||'').trim();
+  const email=(window._userEmail||'').trim();
+  const emailName=email.includes('@')?email.split('@')[0]:'';
+  const raw=rawName||emailName;
   const first=raw.split(/\s+/)[0]||'My';
   brand.textContent=first+"'s";
 }
