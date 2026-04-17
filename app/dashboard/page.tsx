@@ -45,6 +45,8 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
 
     const w = window as any
     w._userId = user.id
+    w._userEmail = user.email
+    w._userName = user.user_metadata?.full_name || user.email
 
     // 1. Load dashboard.js (sets window.S from localStorage)
     const script = document.createElement('script')

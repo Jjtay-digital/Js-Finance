@@ -456,16 +456,15 @@ const DEBIT_LABELS={'cpf-oa':'CPF OA','cpf-sa':'CPF SA','cpf-ma':'CPF MA','bank-
 // ── STORAGE ───────────────────────────────────────────────────────────────────
 const SK='jff_v7';
 function loadS(){
-  try{
-    const d=localStorage.getItem(SK);if(d)return JSON.parse(d);
-    for(const k of ['jff_v6','jff_v5','jff_v4']){
-      const o=localStorage.getItem(k);
-      if(o){const p=JSON.parse(o);return{categories:p.categories||null,catOverrides:p.catOverrides||{},budgets:p.budgets||[],theme:p.theme||'light',profiles:p.profiles||null,apiKey:p.apiKey||''};}
-    }
-    return{};
-  }catch{return{};}
+  // Privacy-first mode: do not read state from browser storage.
+  // Source of truth is Supabase, loaded by app/dashboard/page.tsx.
+  return {};
 }
-function saveS(){localStorage.setItem(SK,JSON.stringify(S));}
+function saveS(){
+  // Privacy-first mode: do not persist dashboard data in browser storage.
+  // Keep current runtime state only; Supabase sync is handled by page.tsx patch.
+  if(Array.isArray(window.TRANSACTIONS))S.transactions=window.TRANSACTIONS;
+}
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 window.S=loadS();let S=window.S;
@@ -491,21 +490,15 @@ if(!S.hidePages)S.hidePages={monthly:false,transactions:false,networth:false};
 if(S.hidePages.monthly===undefined)S.hidePages.monthly=false;
 if(S.hidePages.transactions===undefined)S.hidePages.transactions=false;
 if(S.hidePages.networth===undefined)S.hidePages.networth=false;
-if(!S.profiles)S.profiles=[
-  {id:'jason',name:'Jason Tay Zhi Hui',relation:'Self',dob:'1992-10-01',citizen:'sc',salary:'5000',employer:'SHA2 Labs Pte Ltd',email:'jasontayzh@gmail.com'},
-  {id:'sally',name:'Sally Tan Cai Feng',relation:'Wife',dob:'',citizen:'sc',salary:'',employer:'',email:''},
-];
-if(!S.assets)S.assets=[
-  {id:'dbs-sgd',type:'bank',name:'DBS Multiplier SGD',owner:'Jason',value:1596.34,locked:true},
-  {id:'dbs-jpy',type:'bank',name:'DBS Multiplier JPY (~SGD)',owner:'Jason',value:1889.85,locked:true},
-  {id:'hdb-asset',type:'property',name:'HDB 301D Punggol Place',owner:'Jason and Sally',value:0,subtype:'property',myShare:0.5,desc:'50% share',includeInNW:false},
-];
-if(!S.liabilities)S.liabilities=[
-  {id:'hdb-loan',name:'HDB Home Loan',type:'Housing Loan',amount:171294.74,freq:'Outstanding',owner:'Jason and Sally',notes:'Full $342,589.47 - Jason 50%',fullAmount:342589.47,myShare:0.5},
-  {id:'hdb-inst',name:'HDB Monthly Instalment',type:'Housing Loan',amount:820.15,freq:'Monthly',owner:'Jason',notes:'Auto-deducted CPF OA 10th each month',debit:'cpf-oa'},
-];
+if(!S.profiles){
+  const selfName=(window._userName||'You').toString();
+  const selfEmail=(window._userEmail||'').toString();
+  S.profiles=[{id:'self',name:selfName,relation:'Self',dob:'',citizen:'sc',salary:'',employer:'',email:selfEmail}];
+}
+if(!S.assets)S.assets=[];
+if(!S.liabilities)S.liabilities=[];
 
-window.TRANSACTIONS=BASE_TX.map(t=>({...t,category:S.catOverrides[t.id]??t.defaultCat}));
+window.TRANSACTIONS=Array.isArray(S.transactions)?S.transactions:[];
 let pieChart=null,nwChart=null,editAssetId=null,editLiabId=null,editBudgetIdx=null,pendingCatTxId=null,currentAssetType=null;
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
