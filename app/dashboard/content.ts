@@ -28,11 +28,14 @@ export const DASHBOARD_CSS = `
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-size:14px;line-height:1.5;min-height:100vh}
-.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm)}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;display:flex;align-items:center;justify-content:space-between;height:60px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow-sm);padding-right:360px}
 .logo{font-size:18px;font-weight:800;letter-spacing:-.5px}.logo span{color:var(--accent)}
 .period-badge{background:var(--accent-light);color:var(--accent);font-size:12px;font-weight:600;padding:4px 12px;border-radius:20px}
-.topbar-left{display:flex;align-items:center;gap:14px}.topbar-right{display:flex;align-items:center;gap:10px}
+.topbar-left{display:flex;align-items:center;gap:14px}.topbar-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .theme-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:18px;width:38px;height:38px;border-radius:var(--rs);cursor:pointer;display:flex;align-items:center;justify-content:center}
+@media (max-width:1280px){.topbar{padding-right:300px}}
+@media (max-width:1100px){.topbar{padding-right:240px}.topbar-right #palette-select-top{max-width:96px}}
+@media (max-width:980px){.topbar{padding-right:16px}.topbar-right{display:none}}
 .nav{background:var(--surface);border-bottom:1px solid var(--border);padding:0 32px;display:flex}
 .nav-tab{padding:14px 20px;font-size:14px;font-weight:600;color:var(--text3);cursor:pointer;border:none;background:none;border-bottom:3px solid transparent;margin-bottom:-1px;transition:all .15s;white-space:nowrap}
 .nav-tab:hover{color:var(--text2)}.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}

@@ -142,13 +142,14 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     <>
       <style dangerouslySetInnerHTML={{ __html: DASHBOARD_CSS }} />
       <div dangerouslySetInnerHTML={{ __html: DASHBOARD_BODY }} />
-      <div id="signout-btn" style={{display:'none',position:'fixed',top:'11px',right:'70px',
-        zIndex:200,alignItems:'center',gap:'10px'}}>
+      <div id="signout-btn" style={{display:'none',position:'fixed',top:'11px',right:'16px',
+        zIndex:200,alignItems:'center',gap:'8px',maxWidth:'340px'}}>
         <img id="user-avatar" width={32} height={32}
           style={{borderRadius:'50%',display:'none',border:'2px solid var(--border)'}} alt="" />
         <span id="user-display-name" style={{fontSize:'13px',fontWeight:600,
           color:'var(--text2)',background:'var(--surface2)',padding:'4px 10px',
-          borderRadius:'20px',border:'1px solid var(--border)'}} />
+          borderRadius:'20px',border:'1px solid var(--border)',maxWidth:'110px',
+          overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}} />
         {user?.role === 'owner' && (
           <a href="/admin" style={{fontSize:'12px',fontWeight:600,color:'var(--accent)',
             background:'var(--accent-light)',border:'1.5px solid var(--accent)',
