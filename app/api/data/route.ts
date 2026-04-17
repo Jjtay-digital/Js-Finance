@@ -222,8 +222,15 @@ export async function POST(request: NextRequest) {
   const { error: catDelErr } = await supabase.from('categories').delete().eq('user_id', userId)
   if (catDelErr) return fail('categories.delete', catDelErr)
   if (S.categories?.length) {
+    const cleanedCategories = Array.from(
+      new Set(
+        S.categories
+          .map((name: any) => String(name || '').trim())
+          .filter((name: string) => name.length > 0)
+      )
+    )
     const { error: catInsErr } = await supabase.from('categories').insert(
-      S.categories.map((name: string) => ({ user_id: userId, name }))
+      cleanedCategories.map((name: string) => ({ user_id: userId, name }))
     )
     if (catInsErr) return fail('categories.insert', catInsErr)
   }
