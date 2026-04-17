@@ -1337,6 +1337,18 @@ function rebuildNWChart(){
 // ── TRANSACTIONS ──────────────────────────────────────────────────────────────
 function buildCatOpts(sel){return [...S.categories,'+ New Category'].map(c=>'<option'+(c===sel?' selected':'')+'>'+c+'</option>').join('');}
 function populateCatFilter(){const s=getEl('tx-cat-filter'),prev=s.value;s.innerHTML='<option value="all">All Categories</option>'+S.categories.map(c=>'<option>'+c+'</option>').join('');s.value=prev||'all';}
+function getTxEffectiveType(tx){
+  // Keep table grouping consistent with category overrides.
+  if(tx.category==='Internal Transfer') return 'internal';
+  return tx.type;
+}
+function txToTimestamp(tx){
+  const m = /^([A-Za-z]{3})\s+(\d{4})$/.exec(tx.month||'');
+  const d = /^(\d{1,2})/.exec(tx.date||'');
+  const MM={Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+  if(!m||!d||MM[m[1]]===undefined) return 0;
+  return new Date(parseInt(m[2],10),MM[m[1]],parseInt(d[1],10)).getTime();
+}
 function filterTx(){
   const search=getEl('tx-search').value.toLowerCase().trim();
   const monthSel=getEl('tx-month-sel')?getEl('tx-month-sel').value:'all';
@@ -1346,7 +1358,7 @@ function filterTx(){
   const filtered=TRANSACTIONS.filter(t=>{
     if(monthSel!=='all'){const mn=MN[parseInt(monthSel)];if(!t.month.startsWith(mn))return false;}
     if(yearSel!=='all'&&!t.month.endsWith(yearSel))return false;
-    if(type!=='all'&&t.type!==type)return false;
+    if(type!=='all'&&getTxEffectiveType(t)!==type)return false;
     if(cat!=='all'&&t.category!==cat)return false;
     if(search){
       const a=t.amount.toFixed(2);
@@ -1357,18 +1369,28 @@ function filterTx(){
   setEl('tx-count',filtered.length+' transactions');
   const body=getEl('tx-body');
   if(!filtered.length){body.innerHTML='<tr><td colspan="5"><div class="empty-state">No transactions match</div></td></tr>';return;}
+  const sortedByType={income:[],expense:[],internal:[]};
+  filtered.forEach(tx=>{
+    const et=getTxEffectiveType(tx);
+    if(!sortedByType[et]) sortedByType[et]=[];
+    sortedByType[et].push(tx);
+  });
+  Object.keys(sortedByType).forEach(k=>sortedByType[k].sort((a,b)=>txToTimestamp(b)-txToTimestamp(a)));
+  const ordered=[...sortedByType.income,...sortedByType.expense,...sortedByType.internal];
+
   let html='',lastType=null;
   const tl={income:'Income',expense:'Expenses',internal:'Internal Transfers'};
-  filtered.forEach(tx=>{
-    if(tx.type!==lastType){html+='<tr class="section-group-header"><td colspan="5">'+tl[tx.type]+'</td></tr>';lastType=tx.type;}
-    const sg=tx.type==='income'?'+':tx.type==='internal'?'':'-';
-    const dc='dot-'+(tx.type==='income'?'income':tx.type==='internal'?'internal':'expense');
+  ordered.forEach(tx=>{
+    const t=getTxEffectiveType(tx);
+    if(t!==lastType){html+='<tr class="section-group-header"><td colspan="5">'+tl[t]+'</td></tr>';lastType=t;}
+    const sg=t==='income'?'+':t==='internal'?'':'-';
+    const dc='dot-'+(t==='income'?'income':t==='internal'?'internal':'expense');
     const uf=tx.category==='Unknown'?'<span class="unknown-flag">⚠</span>':'';
     // Amount: bright green/red that works in both light and dark mode
     const isDark=document.documentElement.getAttribute('data-theme')==='dark';
-    const amtColor=tx.type==='income'
+    const amtColor=t==='income'
       ?(isDark?'#34d399':'#059669')
-      :tx.type==='internal'
+      :t==='internal'
         ?'var(--text3)'
         :(isDark?'#f87171':'#dc2626');
     // Category badge with icon and colour
