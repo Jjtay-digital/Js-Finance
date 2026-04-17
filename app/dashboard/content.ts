@@ -284,6 +284,9 @@ export const DASHBOARD_BODY = `<div id="app">
 <!-- NET WORTH -->
 <div class="page" id="page-networth">
   <div class="nw-hero">
+    <div style="position:absolute;top:14px;right:14px;z-index:2">
+      <button class="add-btn" id="nw-hide-btn" onclick="toggleHidePage('networth')" title="Hide/Show net worth numbers">👁</button>
+    </div>
     <div class="nw-hero-label">Total Net Worth</div>
     <div class="nw-hero-value" id="nw-val">—</div>
     <div class="nw-hero-sub" id="nw-sub">—</div>

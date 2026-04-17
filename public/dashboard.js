@@ -487,9 +487,10 @@ if(!S.sectionPrefs)S.sectionPrefs={};
   if(S.sectionPrefs[k].include===undefined)S.sectionPrefs[k].include=true;
   if(S.sectionPrefs[k].hide===undefined)S.sectionPrefs[k].hide=false;
 });
-if(!S.hidePages)S.hidePages={monthly:false,transactions:false};
+if(!S.hidePages)S.hidePages={monthly:false,transactions:false,networth:false};
 if(S.hidePages.monthly===undefined)S.hidePages.monthly=false;
 if(S.hidePages.transactions===undefined)S.hidePages.transactions=false;
+if(S.hidePages.networth===undefined)S.hidePages.networth=false;
 if(!S.profiles)S.profiles=[
   {id:'jason',name:'Jason Tay Zhi Hui',relation:'Self',dob:'1992-10-01',citizen:'sc',salary:'5000',employer:'SHA2 Labs Pte Ltd',email:'jasontayzh@gmail.com'},
   {id:'sally',name:'Sally Tan Cai Feng',relation:'Wife',dob:'',citizen:'sc',salary:'',employer:'',email:''},
@@ -517,6 +518,7 @@ const sectionHidden=key=>!!(S.sectionPrefs[key]&&S.sectionPrefs[key].hide);
 const showAmt=(key,val)=>sectionHidden(key)?'••••':val;
 const isPageHidden=page=>!!(S.hidePages&&S.hidePages[page]);
 const hideVal=(page,val)=>isPageHidden(page)?'••••':val;
+const eyeIcon=hidden=>hidden?'👁̸':'👁';
 
 function syncSectionControls(){
   ['bank','invest','cpf','other','liab'].forEach(k=>{
@@ -524,7 +526,10 @@ function syncSectionControls(){
     const on=sectionIncluded(k);
     if(t)t.classList.toggle('on',on);
     if(l)l.textContent=on?'Included':'Excluded';
-    if(h)h.style.opacity=sectionHidden(k)?'1':'0.8';
+    if(h){
+      h.style.opacity='1';
+      h.textContent=eyeIcon(sectionHidden(k));
+    }
   });
 }
 function toggleSectionInclude(key){
@@ -543,6 +548,8 @@ function syncHideButtons(){
   if(mb)mb.textContent=isPageHidden('monthly')?'👁 Show All':'🙈 Hide All';
   const tb=getEl('tx-hide-btn');
   if(tb)tb.textContent=isPageHidden('transactions')?'👁 Show All':'🙈 Hide All';
+  const nb=getEl('nw-hide-btn');
+  if(nb)nb.textContent=eyeIcon(isPageHidden('networth'));
 }
 function toggleHidePage(page){
   S.hidePages[page]=!S.hidePages[page];
@@ -855,8 +862,8 @@ function updateNWTotals(){
   const totalLiab=sectionIncluded('liab')?S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0):0;
   const nw=totalAssets-totalLiab;
   setEl('assets-total'&&'nw-val',(a=>a)(''));
-  setEl('nw-val',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw)));
-  setEl('nw-sub','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)+' · March 2026');
+  setEl('nw-val',hideVal('networth',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw))));
+  setEl('nw-sub',hideVal('networth','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)+' · March 2026'));
   const liquid=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
   setEl('compare-liquid','$'+fmtN(liquid));
   const barEl=getEl('compare-liquid-bar');if(barEl)barEl.style.width=Math.min(liquid/30000*100,100).toFixed(0)+'%';
