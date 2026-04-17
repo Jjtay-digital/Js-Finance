@@ -476,6 +476,7 @@ const DEBIT_LABELS={'cpf-oa':'CPF OA','cpf-sa':'CPF SA','cpf-ma':'CPF MA','bank-
 
 // ── STORAGE ───────────────────────────────────────────────────────────────────
 const SK='jff_v7';
+const UI_PREFS_KEY='jff_ui_prefs_v1';
 function loadS(){
   // Privacy-first mode: do not read state from browser storage.
   // Source of truth is Supabase, loaded by app/dashboard/page.tsx.
@@ -486,13 +487,25 @@ function saveS(){
   // Keep current runtime state only; Supabase sync is handled by page.tsx patch.
   if(Array.isArray(window.TRANSACTIONS))S.transactions=window.TRANSACTIONS;
 }
+function loadUIPrefs(){
+  try{
+    const raw=localStorage.getItem(UI_PREFS_KEY);
+    return raw?JSON.parse(raw):{};
+  }catch(e){return {};}
+}
+function saveUIPrefs(){
+  try{
+    localStorage.setItem(UI_PREFS_KEY,JSON.stringify({theme:S.theme,palette:S.palette}));
+  }catch(e){}
+}
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 window.S=loadS();let S=window.S;
+const UI_PREFS=loadUIPrefs();
 if(!S.categories)S.categories=[...DEFAULT_CATS];
 if(!S.catOverrides)S.catOverrides={};
 if(!S.budgets)S.budgets=[];
-if(!S.theme)S.theme='light';
+if(!S.theme)S.theme=UI_PREFS.theme||'light';
 if(!S.activePage)S.activePage='monthly';
 if(!S.apiKey)S.apiKey='';
 if(!S.usdSgd)S.usdSgd=1.34;
@@ -516,7 +529,7 @@ if(!S.dataView)S.dataView='my';
 if(!S.familyCombined)S.familyCombined={assets:[],liabilities:[],transactions:[],members:[]};
 if(!S.familyGroupId)S.familyGroupId=null;
 if(!S.peerData)S.peerData={};
-if(!S.palette)S.palette=S.peerData.palette||'blue';
+if(!S.palette)S.palette=S.peerData.palette||UI_PREFS.palette||'blue';
 const selfName=(window._userName||window._userEmail||'You').toString();
 const selfEmail=(window._userEmail||'').toString();
 if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
@@ -710,7 +723,16 @@ function applyTheme(){
   if(btn)btn.className='toggle'+(d?' on':'');if(lbl)lbl.textContent=d?'On':'Off';
   applyPalette();
 }
-function toggleTheme(){S.theme=S.theme==='dark'?'light':'dark';saveS();applyTheme();rebuildMonthlyChart();rebuildNWChart();}
+function toggleTheme(){
+  S.theme=S.theme==='dark'?'light':'dark';
+  if(!S.peerData)S.peerData={};
+  S.peerData.theme=S.theme;
+  saveS();
+  saveUIPrefs();
+  applyTheme();
+  rebuildMonthlyChart();
+  rebuildNWChart();
+}
 
 const PALETTES={
   blue:{accent:'#4361ee',accent2:'#3a0ca3'},
@@ -733,6 +755,7 @@ function setPalette(name){
   if(!S.peerData)S.peerData={};
   S.peerData.palette=S.palette;
   saveS();
+  saveUIPrefs();
   applyPalette();
   rebuildMonthlyChart();
   rebuildNWChart();

@@ -224,8 +224,6 @@ export const DASHBOARD_BODY = `<div id="app">
       <option value="indigo">Indigo</option>
       <option value="slate">Slate</option>
     </select>
-  </div>
-  <div class="topbar-right">
     <button class="theme-btn" onclick="toggleTheme()" id="theme-btn">🌙</button>
   </div>
 </div>
