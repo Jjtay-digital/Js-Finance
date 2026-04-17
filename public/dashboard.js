@@ -873,7 +873,7 @@ function showPage(name,tab){
   if(name==='monthly'){calcSummary();rebuildMonthlyChart();}
   if(name==='networth'){renderNW();rebuildNWChart();calcCPF();}
   if(name==='transactions'){filterTx();populateCatFilter();}
-  if(name==='settings'){renderCatSettings();}
+  if(name==='categories'){renderCatSettings();}
 }
 
 // ── MONTHLY ───────────────────────────────────────────────────────────────────

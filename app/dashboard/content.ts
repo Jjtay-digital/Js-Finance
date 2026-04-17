@@ -231,6 +231,7 @@ export const DASHBOARD_BODY = `<div id="app">
   <button class="nav-tab active" data-page="monthly" onclick="showPage('monthly',this)">Monthly Report</button>
   <button class="nav-tab" data-page="networth" onclick="showPage('networth',this)">Net Worth</button>
   <button class="nav-tab" data-page="transactions" onclick="showPage('transactions',this)">Transactions</button>
+  <button class="nav-tab" data-page="categories" onclick="showPage('categories',this)">Categories</button>
   <button class="nav-tab" data-page="settings" onclick="showPage('settings',this)">Settings</button>
 </div>
 
@@ -423,6 +424,17 @@ export const DASHBOARD_BODY = `<div id="app">
   <div id="tx-foreign-cards"></div>
 </div>
 
+<!-- CATEGORIES -->
+<div class="page" id="page-categories">
+  <div style="max-width:820px">
+    <div class="settings-section">
+      <div class="settings-title">Categories <span style="font-size:13px;font-weight:500;color:var(--text3)">Rename or delete spending categories</span></div>
+      <div id="cat-settings-list" style="margin-bottom:16px"></div>
+      <button class="btn sm" onclick="openAddCatFromSettings()">+ Add Category</button>
+    </div>
+  </div>
+</div>
+
 <!-- SETTINGS -->
 <div class="page" id="page-settings">
   <div style="max-width:700px">
@@ -442,11 +454,6 @@ export const DASHBOARD_BODY = `<div id="app">
         <button class="btn" onclick="testApiKey()">Test</button>
       </div>
       <p class="section-note" style="margin-top:8px">Your key is stored only in your browser (localStorage). It never leaves your device except to call api.anthropic.com directly.</p>
-    </div>
-    <div class="settings-section">
-      <div class="settings-title">Categories <span style="font-size:13px;font-weight:500;color:var(--text3)">Rename or delete spending categories</span></div>
-      <div id="cat-settings-list" style="margin-bottom:16px"></div>
-      <button class="btn sm" onclick="openAddCatFromSettings()">+ Add Category</button>
     </div>
     <div class="settings-section">
       <div class="settings-title">Display</div>
