@@ -495,7 +495,11 @@ function loadUIPrefs(){
 }
 function saveUIPrefs(){
   try{
-    localStorage.setItem(UI_PREFS_KEY,JSON.stringify({theme:S.theme,palette:S.palette}));
+    localStorage.setItem(UI_PREFS_KEY,JSON.stringify({
+      theme:S.theme,
+      palette:S.palette,
+      activePage:S.activePage||'monthly',
+    }));
   }catch(e){}
 }
 
@@ -507,7 +511,7 @@ if(!S.catOverrides)S.catOverrides={};
 if(!S.budgets)S.budgets=[];
 if(!S.theme)S.theme=UI_PREFS.theme||'light';
 if(S.shareApiKey===undefined)S.shareApiKey=false;
-if(!S.activePage)S.activePage='monthly';
+if(!S.activePage)S.activePage=UI_PREFS.activePage||'monthly';
 if(!S.apiKey)S.apiKey='';
 if(!S.usdSgd)S.usdSgd=1.34;
 if(!S.activeProfileId)S.activeProfileId='jason';
@@ -911,7 +915,7 @@ function showPage(name,tab){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   getEl('page-'+name).classList.add('active');tab.classList.add('active');
-  S.activePage=name;saveS();
+  S.activePage=name;saveS();saveUIPrefs();
   if(name==='monthly'){calcSummary();rebuildMonthlyChart();}
   if(name==='networth'){renderNW();rebuildNWChart();calcCPF();}
   if(name==='transactions'){filterTx();populateCatFilter();}

@@ -48,6 +48,9 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     w._userEmail = user.email
     w._userName = user.user_metadata?.full_name || user.email
     w.__dashboardHydrated = false
+    const hydrationTimeout = setTimeout(() => {
+      w.__dashboardHydrated = true
+    }, 8000)
 
     // Ensure no stale in-memory dashboard state survives user switches.
     delete w.S
@@ -73,7 +76,22 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ userId: user.id, state: stateWithTx })
-          }).catch(() => {})
+          }).then(async (res) => {
+            if (res.ok) return
+            const err = await res.json().catch(() => ({} as any))
+            const msg = err?.error || `Save failed (${res.status})`
+            if (Date.now() - (w.__lastSaveWarnTs || 0) > 5000) {
+              if (typeof w.showToast === 'function') w.showToast(msg, 4000)
+              w.__lastSaveWarnTs = Date.now()
+            }
+            console.error('Save failed:', err)
+          }).catch((e) => {
+            if (Date.now() - (w.__lastSaveWarnTs || 0) > 5000) {
+              if (typeof w.showToast === 'function') w.showToast('Save failed (network error)', 4000)
+              w.__lastSaveWarnTs = Date.now()
+            }
+            console.error('Save failed:', e)
+          })
         }
       }
 
@@ -128,6 +146,7 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
         })
         .catch(() => {})
         .finally(() => {
+          clearTimeout(hydrationTimeout)
           // Re-enable syncing after first load attempt so user edits can save.
           // Server-side route must remain the final guard against destructive payloads.
           w.__dashboardHydrated = true
