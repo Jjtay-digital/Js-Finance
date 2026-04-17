@@ -1516,30 +1516,57 @@ function switchActiveProfile(pid){
 }
 function renderSettingsAccounts(){
   const el=getEl('settings-accounts-panel');if(!el)return;
-  const p=S.profiles.find(x=>x.id===S.activeProfileId);
-  const isSelf=!p||p.relation==='Self';
-  const name=p?p.name.split(' ')[0]:'User';
-  if(isSelf){
-    el.innerHTML=
-      '<div class="setting-row"><div><div class="setting-name">DBS Multiplier (SGD + JPY)</div>'
-      +'<div class="setting-desc">120-322751-6 · Last updated Mar 2026</div></div><span class="badge badge-green">Active</span></div>'
-      +'<div class="setting-row"><div><div class="setting-name">POSB Everyday Credit Card</div>'
-      +'<div class="setting-desc">5520-3800-5694-2739</div></div><span class="badge badge-green">Active</span></div>'
-      +'<div class="setting-row"><div><div class="setting-name">HDB Home Loan</div>'
-      +'<div class="setting-desc">01-3947095-1 · Joint with Sally</div></div><span class="badge badge-green">Active</span></div>'
-      +'<div class="setting-row"><div><div class="setting-name">UOB Account</div>'
-      +'<div class="setting-desc">Add via Net Worth</div></div><span class="badge badge-amber">Pending</span></div>'
-      +'<div class="setting-row"><div><div class="setting-name">OCBC Joint Account</div>'
-      +'<div class="setting-desc">Add via Net Worth</div></div><span class="badge badge-amber">Pending</span></div>'
-      +'<div class="setting-row"><div><div class="setting-name">CPF Account</div>'
-      +'<div class="setting-desc">Add via Net Worth</div></div><span class="badge badge-amber">Pending</span></div>';
-  } else {
-    el.innerHTML='<div style="background:var(--surface2);border:1.5px dashed var(--border2);border-radius:10px;padding:28px;text-align:center">'
-      +'<div style="font-size:32px;margin-bottom:8px">&#128100;</div>'
-      +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">'+name+' accounts not set up yet</div>'
-      +'<div style="font-size:13px;color:var(--text3)">'+name+' will add their own accounts in Phase 2.</div>'
-      +'<div style="margin-top:12px;background:var(--amber-bg);color:var(--amber);font-weight:600;padding:6px 14px;border-radius:20px;display:inline-block;font-size:12px">Phase 2 — coming soon</div></div>';
+  const assets=(S.assets||[]);
+  const liabs=(S.liabilities||[]);
+  const rows=[];
+
+  assets.forEach(a=>{
+    const typeLabel=a.type==='stock'||a.type==='etf'?'Investment':a.type==='cpf'?'CPF':'Asset';
+    rows.push({
+      id:a.id,
+      kind:'asset',
+      name:a.name||'Unnamed Asset',
+      desc:(a.owner?a.owner+' · ':'')+typeLabel,
+      status:'Added'
+    });
+  });
+  liabs.forEach(l=>{
+    rows.push({
+      id:l.id,
+      kind:'liab',
+      name:l.name||'Unnamed Liability',
+      desc:(l.owner?l.owner+' · ':'')+(l.type||'Liability'),
+      status:'Added'
+    });
+  });
+
+  if(!rows.length){
+    el.innerHTML='<div style="background:var(--surface2);border:1.5px dashed var(--border2);border-radius:10px;padding:22px;text-align:center">'
+      +'<div style="font-size:15px;font-weight:700;margin-bottom:6px">No accounts yet</div>'
+      +'<div style="font-size:13px;color:var(--text3)">Add assets or liabilities to start tracking your own account status.</div></div>';
+    return;
   }
+
+  el.innerHTML=rows.map(r=>
+    '<div class="setting-row"><div><div class="setting-name">'+r.name+'</div><div class="setting-desc">'+r.desc+'</div></div>'+
+    '<div style="display:flex;align-items:center;gap:8px">'+
+    '<span class="badge badge-green">'+r.status+'</span>'+
+    (r.kind==='asset'
+      ?'<button class="btn xs" onclick="openEditAsset(\''+r.id+'\')">Edit</button><button class="btn xs danger" onclick="removeAssetFromSettings(\''+r.id+'\')">Delete</button>'
+      :'<button class="btn xs" onclick="openEditLiab(\''+r.id+'\')">Edit</button><button class="btn xs danger" onclick="removeLiabFromSettings(\''+r.id+'\')">Delete</button>')+
+    '</div></div>'
+  ).join('');
+}
+
+function removeAssetFromSettings(id){
+  if(!confirm('Delete this asset?'))return;
+  S.assets=S.assets.filter(a=>a.id!==id);saveS();
+  renderSettingsAccounts();renderNW();rebuildNWChart();showToast('Asset deleted');
+}
+function removeLiabFromSettings(id){
+  if(!confirm('Delete this liability?'))return;
+  S.liabilities=S.liabilities.filter(l=>l.id!==id);saveS();
+  renderSettingsAccounts();renderNW();showToast('Liability deleted');
 }
 function renderProfileTabs(){
   getEl('profile-tabs').innerHTML=S.profiles.map((p,i)=>'<button class="profile-tab-btn'+(i===0?' active':'')+'" data-pi="'+i+'" onclick="switchPTab(parseInt(this.dataset.pi),this)">'+p.name.split(' ')[0]+' <span style="font-size:10px;opacity:.7">'+p.relation+'</span></button>').join('');

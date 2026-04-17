@@ -441,13 +441,12 @@ export const DASHBOARD_BODY = `<div id="app">
       <div class="setting-row"><div><div class="setting-name">Dark Mode</div><div class="setting-desc">Switch between light and dark theme</div></div><div class="toggle-wrap"><span class="toggle-label" id="theme-label">Off</span><button class="toggle" id="theme-toggle-btn" onclick="toggleTheme()"></button></div></div>
     </div>
     <div class="settings-section">
-      <div class="settings-title">Accounts Status</div>
-      <div class="setting-row"><div><div class="setting-name">DBS Multiplier (SGD + JPY)</div><div class="setting-desc">120-322751-6 &middot; Last updated Mar 2026</div></div><span class="badge badge-green">Active</span></div>
-      <div class="setting-row"><div><div class="setting-name">POSB Everyday Credit Card</div><div class="setting-desc">5520-3800-5694-2739</div></div><span class="badge badge-green">Active</span></div>
-      <div class="setting-row"><div><div class="setting-name">HDB Home Loan</div><div class="setting-desc">01-3947095-1 &middot; Joint with Sally</div></div><span class="badge badge-green">Active</span></div>
-      <div class="setting-row"><div><div class="setting-name">UOB Account</div><div class="setting-desc">Add via Net Worth</div></div><span class="badge badge-amber">Pending</span></div>
-      <div class="setting-row"><div><div class="setting-name">OCBC Joint Account</div><div class="setting-desc">Add via Net Worth</div></div><span class="badge badge-amber">Pending</span></div>
-      <div class="setting-row"><div><div class="setting-name">CPF Accounts</div><div class="setting-desc">Add via Net Worth &rarr; CPF</div></div><span class="badge badge-amber">Pending</span></div>
+      <div class="settings-title">Accounts Status <span style="font-size:12px;font-weight:500;color:var(--text3)">From your own assets and liabilities only</span></div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="btn sm" onclick="openAssetModal(null)">+ Add Asset</button>
+        <button class="btn sm" style="border-color:var(--red);color:var(--red)" onclick="openLiabModal(null)">+ Add Liability</button>
+      </div>
+      <div id="settings-accounts-panel"></div>
     </div>
   </div>
 </div>
