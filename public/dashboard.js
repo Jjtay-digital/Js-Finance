@@ -397,7 +397,7 @@ function guessCat(desc,source,type){
   if(d.includes('internet')||d.includes('singtel')||d.includes('starhub')||d.includes('m1')) return 'Internet';
   if(d.includes('handphone')||d.includes('mobile')) return 'Handphone';
   if(d.includes('electric')||d.includes('sp group')||d.includes('utilities')) return 'Utilities';
-  if(d.includes('pokemon')||d.includes('rk')||d.includes('shafeeq')||d.includes('dex ')||d.includes('wayne')||d.includes('xuan')) return 'Hobbies - Pokemon';
+  if(d.includes('pokemon')||d.includes('rk')||d.includes('shafeeq')||d.includes('dex ')||d.includes('wayne')||d.includes('xuan')) return 'Hobbies';
   if(d.includes('paynow')||d.includes('fast transfer')||d.includes('internal')) return 'Internal Transfer';
   if(d.includes('sally')) return 'Gift Received';
   return 'Unknown';
@@ -440,8 +440,8 @@ const BASE_TX = [
   {id:32,date:'22 Feb',month:'Mar 2026',desc:'POSB Card — Bill Payment',source:'Credit Card',type:'internal',amount:254.66,defaultCat:'Internal Transfer'},
 ];
 
-const DEFAULT_CATS=['Salary','Claims','Food','Insurance','Tax','Hobbies - Pokemon','Transport','Utilities','Internet','Handphone','Subscriptions','Gift Received','Internal Transfer','Unknown'];
-const CAT_COLORS={'Salary':'#049a74','Claims':'#0096c7','Food':'#f9a825','Insurance':'#4361ee','Tax':'#7209b7','Hobbies - Pokemon':'#f3722c','Transport':'#06b6d4','Utilities':'#ec4899','Internet':'#0ea5e9','Handphone':'#84cc16','Subscriptions':'#ef233c','Gift Received':'#a855f7','Internal Transfer':'#94a3b8','Unknown':'#cbd5e1'};
+const DEFAULT_CATS=['Salary','Claims','Food','Insurance','Tax','Hobbies','Transport','Utilities','Internet','Handphone','Subscriptions','Gift Received','Internal Transfer','Unknown'];
+const CAT_COLORS={'Salary':'#049a74','Claims':'#0096c7','Food':'#f9a825','Insurance':'#4361ee','Tax':'#7209b7','Hobbies':'#f3722c','Transport':'#06b6d4','Utilities':'#ec4899','Internet':'#0ea5e9','Handphone':'#84cc16','Subscriptions':'#ef233c','Gift Received':'#a855f7','Internal Transfer':'#94a3b8','Unknown':'#cbd5e1'};
 
 // Category visual config: icon + bg + text (light) + text (dark)
 const CAT_STYLE={
@@ -450,7 +450,7 @@ const CAT_STYLE={
   'Food':           {icon:'🍜', bg:'#fef9c3', col:'#a16207', darkBg:'#2d1f00', darkCol:'#fbbf24'},
   'Insurance':      {icon:'🛡️', bg:'#ede9fe', col:'#6d28d9', darkBg:'#1e0a3d', darkCol:'#a78bfa'},
   'Tax':            {icon:'🏛',  bg:'#f3e8ff', col:'#7e22ce', darkBg:'#1a0630', darkCol:'#c084fc'},
-  'Hobbies - Pokemon':{icon:'🃏', bg:'#ffedd5', col:'#c2410c', darkBg:'#2d1000', darkCol:'#fb923c'},
+  'Hobbies':        {icon:'🃏', bg:'#ffedd5', col:'#c2410c', darkBg:'#2d1000', darkCol:'#fb923c'},
   'Transport':      {icon:'🚌', bg:'#cffafe', col:'#0e7490', darkBg:'#001f26', darkCol:'#22d3ee'},
   'Utilities':      {icon:'💡', bg:'#fce7f3', col:'#be185d', darkBg:'#2d0020', darkCol:'#f472b6'},
   'Internet':       {icon:'📶', bg:'#e0f2fe', col:'#0369a1', darkBg:'#001a2e', darkCol:'#38bdf8'},
@@ -515,6 +515,23 @@ if(S.hidePages.networth===undefined)S.hidePages.networth=false;
 if(!S.dataView)S.dataView='my';
 if(!S.familyCombined)S.familyCombined={assets:[],liabilities:[],transactions:[],members:[]};
 if(!S.familyGroupId)S.familyGroupId=null;
+if(S.cleanedDefaultCats!==true){
+  S.categories=[...DEFAULT_CATS];
+  if(Array.isArray(window.TRANSACTIONS)){
+    window.TRANSACTIONS.forEach(t=>{
+      if(t&&t.category&&!DEFAULT_CATS.includes(t.category))t.category='Unknown';
+    });
+  }
+  if(S.catOverrides){
+    Object.keys(S.catOverrides).forEach(k=>{
+      if(!DEFAULT_CATS.includes(S.catOverrides[k]))delete S.catOverrides[k];
+    });
+  }
+  if(Array.isArray(S.budgets)){
+    S.budgets=S.budgets.filter(b=>DEFAULT_CATS.includes(b.category));
+  }
+  S.cleanedDefaultCats=true;
+}
 const selfName=(window._userName||window._userEmail||'You').toString();
 const selfEmail=(window._userEmail||'').toString();
 if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
@@ -740,7 +757,42 @@ function hydrateBrandName(){
 }
 function isFamilyView(){return S.dataView==='family';}
 function getViewAssets(){return isFamilyView()?(S.familyCombined?.assets||[]):(S.assets||[]);}
-function getViewLiabilities(){return isFamilyView()?(S.familyCombined?.liabilities||[]):(S.liabilities||[]);}
+function getViewLiabilities(){
+  if(!isFamilyView())return S.liabilities||[];
+  const src=S.familyCombined?.liabilities||[];
+  const buckets={};
+  src.forEach(l=>{
+    const key=((l.name||'')+'|'+(l.type||'')+'|'+(l.debit||'')).toLowerCase().trim();
+    if(!buckets[key])buckets[key]=[];
+    buckets[key].push(l);
+  });
+  return Object.values(buckets).map(list=>{
+    if(list.length===1)return list[0];
+    const sample=list[0];
+    const totalAmount=list.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+    const fullMax=Math.max(...list.map(l=>parseFloat(l.fullAmount)||0),0);
+    const shareSum=list.reduce((s,l)=>s+(parseFloat(l.myShare)||0),0);
+    const hasShares=list.some(l=>{const sh=parseFloat(l.myShare);return !isNaN(sh)&&sh>0&&sh<=1;});
+    const nameKey=(sample.name||'').toLowerCase();
+    const isHousingShared=/housing|hdb|mortgage|home loan/.test(nameKey);
+    let combinedAmount=totalAmount;
+    if(hasShares&&fullMax>0){
+      const effectiveShare=Math.min(Math.max(shareSum,0),1);
+      combinedAmount=fullMax*effectiveShare;
+    }else if(isHousingShared){
+      combinedAmount=Math.max(...list.map(l=>parseFloat(l.amount)||0),0);
+    }
+    return {
+      ...sample,
+      id:'fam_'+(sample.id||Math.random().toString(36).slice(2)),
+      owner:'Family',
+      amount:parseFloat(combinedAmount.toFixed(2)),
+      fullAmount:fullMax||sample.fullAmount,
+      myShare:hasShares?Math.min(shareSum,1):sample.myShare,
+      notes:'Combined from family members',
+    };
+  });
+}
 function getViewTransactions(){return isFamilyView()?(S.familyCombined?.transactions||[]):(window.TRANSACTIONS||[]);}
 function syncDataViewUI(){
   ['nw','tx'].forEach(sfx=>{
@@ -748,6 +800,9 @@ function syncDataViewUI(){
     if(myBtn)myBtn.classList.toggle('active',S.dataView!=='family');
     if(famBtn)famBtn.classList.toggle('active',S.dataView==='family');
   });
+  const label=isFamilyView()?'Family Combined':'My View';
+  setEl('view-mode-badge-nw',label);
+  setEl('view-mode-badge-tx',label);
 }
 async function ensureFamilyCombinedData(){
   if(!S.familyGroupId){
@@ -990,6 +1045,8 @@ function updateNWTotals(){
   setEl('assets-total'&&'nw-val',(a=>a)(''));
   setEl('nw-val',hideVal('networth',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw))));
   setEl('nw-sub',hideVal('networth','Assets: $'+fmtN(totalAssets)+' · Liabilities: $'+fmtN(totalLiab)));
+  const badge=getEl('view-mode-badge-nw');
+  if(badge)badge.style.opacity='1';
   const liquid=assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
   setEl('compare-liquid','$'+fmtN(liquid));
   const barEl=getEl('compare-liquid-bar');if(barEl)barEl.style.width=Math.min(liquid/30000*100,100).toFixed(0)+'%';
@@ -1836,24 +1893,30 @@ async function saveNewProfile(){
   const name=getEl('pm-name').value.trim();
   if(!name){showToast('Enter a name');return;}
   const email=(getEl('pm-email').value||'').trim().toLowerCase();
+  if(!email){showToast('Email is required to pair family member');return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){showToast('Enter a valid email');return;}
   const profile={id:'m_'+Date.now(),name,relation:getEl('pm-relation').value,dob:getEl('pm-dob').value,citizen:getEl('pm-citizen').value,salary:'',employer:'',email};
   S.profiles.push(profile);
   saveS();
-  if(email){
-    try{
-      const r=await fetch('/api/family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pair',email,name})});
-      const d=await r.json();
-      if(r.ok){
-        profile.familyGroupId=d.groupId;
-        profile.familyUserId=d.targetUserId;
-        saveS();
-        showToast('Paired with '+email);
-      }else{
-        showToast(d.error||'Could not pair by email');
-      }
-    }catch(e){
-      showToast('Pairing failed, profile saved locally');
+  try{
+    const r=await fetch('/api/family',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pair',email,name})});
+    const d=await r.json();
+    if(r.ok){
+      profile.familyGroupId=d.groupId;
+      profile.familyUserId=d.targetUserId;
+      saveS();
+      showToast('Paired with '+email);
+    }else{
+      S.profiles=S.profiles.filter(p=>p.id!==profile.id);
+      saveS();
+      showToast(d.error||'Could not pair by email');
+      return;
     }
+  }catch(e){
+    S.profiles=S.profiles.filter(p=>p.id!==profile.id);
+    saveS();
+    showToast('Pairing failed');
+    return;
   }
   closeProfileModal();
   renderProfileTabs();

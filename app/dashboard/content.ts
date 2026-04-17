@@ -290,6 +290,7 @@ export const DASHBOARD_BODY = `<div id="app">
     <div class="nw-hero-label">Total Net Worth</div>
     <div class="nw-hero-value" id="nw-val">—</div>
     <div class="nw-hero-sub" id="nw-sub">—</div>
+    <div class="nw-hero-sub" id="view-mode-badge-nw" style="margin-top:6px;font-weight:700">My View</div>
   </div>
   <div class="refresh-row" style="justify-content:space-between">
     <div style="display:flex;align-items:center;gap:10px">
@@ -410,7 +411,7 @@ export const DASHBOARD_BODY = `<div id="app">
     <button class="add-btn" id="tx-hide-btn" onclick="toggleHidePage('transactions')" title="Hide/Show transaction values">🙈 Hide All</button>
   </div>
   <div class="card tx-currency-card" id="tx-sgd-card" data-currency="SGD">
-    <div class="card-header"><div class="card-title">Transactions &#8212; SGD</div><span style="font-size:13px;color:var(--text3);font-weight:600" id="tx-count"></span></div>
+    <div class="card-header"><div style="display:flex;align-items:center;gap:10px"><div class="card-title">Transactions &#8212; SGD</div><span class="badge badge-blue" id="view-mode-badge-tx">My View</span></div><span style="font-size:13px;color:var(--text3);font-weight:600" id="tx-count"></span></div>
     <div style="overflow-x:auto"><table class="tx-table"><thead><tr><th>Date</th><th>Description</th><th>Source</th><th style="text-align:right">Amount</th><th>Category</th></tr></thead><tbody id="tx-body"></tbody></table></div>
   </div>
   <div id="tx-foreign-cards"></div>
@@ -420,7 +421,7 @@ export const DASHBOARD_BODY = `<div id="app">
 <div class="page" id="page-settings">
   <div style="max-width:700px">
     <div class="settings-section">
-      <div class="settings-title">Family Profiles <button class="btn sm" onclick="openAddProfileModal()">+ Add Member</button></div>
+      <div class="settings-title">Family Profiles <span style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;font-weight:500;color:var(--text3)">Pair by email to link accounts into one family view</span><button class="btn sm" onclick="openAddProfileModal()">+ Add Member</button></span></div>
       <div class="profile-tabs" id="profile-tabs"></div>
       <div id="profile-panels"></div>
     </div>
@@ -606,10 +607,10 @@ export const DASHBOARD_BODY = `<div id="app">
 </div>
 
 <div class="modal-overlay" id="profile-modal">
-  <div class="modal" style="width:420px"><h3>Add Family Member</h3><p>Add a profile.</p>
+  <div class="modal" style="width:420px"><h3>Add Family Member</h3><p>Pair a user by email so both accounts can view family-combined data.</p>
     <div class="modal-2col">
       <div class="modal-field"><label>Full Name</label><input type="text" id="pm-name"></div>
-      <div class="modal-field"><label>Email (optional)</label><input type="email" id="pm-email" placeholder="member@gmail.com"></div>
+      <div class="modal-field"><label>Email *</label><input type="email" id="pm-email" placeholder="member@gmail.com" required></div>
       <div class="modal-field"><label>Relation</label><select id="pm-relation"><option>Wife</option><option>Husband</option><option>Child</option><option>Parent</option><option>Other</option></select></div>
       <div class="modal-field"><label>Date of Birth</label><input type="date" id="pm-dob"></div>
       <div class="modal-field"><label>Nationality</label><select id="pm-citizen"><option value="sc">Singapore Citizen</option><option value="pr">Singapore PR</option><option value="other">Other</option></select></div>
