@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -22,16 +23,26 @@ async function getSupabase() {
   )
 }
 
+function getAdminSupabase() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) return null
+  return createClient(url, key, { auth: { persistSession: false } })
+}
+
 // GET — load all user data
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('userId')
   if (!userId) return NextResponse.json({ error: 'No userId' }, { status: 400 })
 
-  const supabase = await getSupabase()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const authSupabase = await getSupabase()
+  const { data: { user }, error: authError } = await authSupabase.auth.getUser()
   console.log('GET auth check:', user?.id, 'requested:', userId, 'error:', authError?.message)
   if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized', debug: { hasUser: !!user, userId: user?.id } }, { status: 401 })
+
+  const admin = getAdminSupabase()
+  const supabase = admin || authSupabase
 
   const [
     { data: settings },
@@ -86,7 +97,7 @@ export async function GET(request: NextRequest) {
   let sharedAlphaKey = null
   try {
     // Find family groups this user belongs to
-    const { data: memberships } = await supabase
+    const { data: memberships } = await authSupabase
       .from('family_group_members')
       .select('group_id')
       .eq('user_id', userId)
@@ -96,7 +107,7 @@ export async function GET(request: NextRequest) {
       const groupIds = memberships.map((m: any) => m.group_id)
 
       // Source of truth for owner is membership role, not only family_groups.created_by.
-      const { data: ownerMemberships } = await supabase
+      const { data: ownerMemberships } = await authSupabase
         .from('family_group_members')
         .select('group_id, user_id')
         .in('group_id', groupIds)
@@ -105,7 +116,7 @@ export async function GET(request: NextRequest) {
 
       for (const owner of (ownerMemberships || [])) {
         if (owner.user_id === userId) continue
-        const { data: ownerSettings } = await supabase
+        const { data: ownerSettings } = await authSupabase
           .from('settings')
           .select('api_key, share_api_key, alpha_vantage_key')
           .eq('user_id', owner.user_id)
@@ -153,10 +164,19 @@ export async function POST(request: NextRequest) {
   const { userId, state } = await request.json()
   if (!userId || !state) return NextResponse.json({ error: 'Missing data' }, { status: 400 })
 
-  const supabase = await getSupabase()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  const authSupabase = await getSupabase()
+  const { data: { user }, error: authError } = await authSupabase.auth.getUser()
   console.log('GET auth check:', user?.id, 'requested:', userId, 'error:', authError?.message)
   if (!user || user.id !== userId) return NextResponse.json({ error: 'Unauthorized', debug: { hasUser: !!user, userId: user?.id } }, { status: 401 })
+
+  const admin = getAdminSupabase()
+  if (!admin) {
+    return NextResponse.json({
+      error: 'Server misconfiguration',
+      details: 'SUPABASE_SERVICE_ROLE_KEY is not set on the server. Dashboard saves require a service-role client so writes are not blocked by RLS on auxiliary tables (categories, budgets, overrides).',
+    }, { status: 500 })
+  }
+  const supabase = admin
 
   const S = state
   const now = new Date().toISOString()
@@ -164,8 +184,16 @@ export async function POST(request: NextRequest) {
 
   const fail = (stage: string, err: any) => {
     const msg = err?.message || String(err || 'Unknown error')
-    console.error(`POST /api/data failed at ${stage}:`, msg)
-    return NextResponse.json({ error: `Save failed at ${stage}`, details: msg }, { status: 500 })
+    const code = err?.code
+    const hint = err?.hint
+    console.error(`POST /api/data failed at ${stage}:`, msg, code ? `code=${code}` : '', hint ? `hint=${hint}` : '')
+    return NextResponse.json({
+      error: `Save failed at ${stage}`,
+      details: msg,
+      code,
+      hint,
+      usingServiceRole: !!admin,
+    }, { status: 500 })
   }
 
   // Save settings
