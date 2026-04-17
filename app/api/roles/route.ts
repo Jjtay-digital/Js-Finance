@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { targetUserId, newRole } = await request.json()
-  if (!targetUserId || !['owner','partner','guest','blocked'].includes(newRole))
+  if (!targetUserId || !['owner','admin','guest','blocked'].includes(newRole))
     return NextResponse.json({ error: 'Invalid' }, { status: 400 })
 
   const admin = getAdminSupabase()
