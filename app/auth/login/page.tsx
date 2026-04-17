@@ -31,7 +31,7 @@ export default function LoginPage() {
           Family Finance
         </h1>
         <p style={{fontSize:'14px', color:'#7b82a8', marginBottom:'32px', fontWeight:'500'}}>
-          Jason & Sally · Private Dashboard
+          Secure sign-in to your dashboard
         </p>
         <button
           onClick={signInWithGoogle}
@@ -52,7 +52,7 @@ export default function LoginPage() {
           {loading ? 'Redirecting...' : 'Continue with Google'}
         </button>
         <p style={{fontSize:'12px', color:'#a0a8b8', marginTop:'24px', lineHeight:'1.6'}}>
-          Only jasontayzh@gmail.com and Sally's Gmail can access this dashboard.
+          Sign in with your authorized Google account.
         </p>
       </div>
     </div>
