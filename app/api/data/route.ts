@@ -162,8 +162,14 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
   console.log('POST saving: assets=', S.assets?.length, 'liabilities=', S.liabilities?.length, 'categories=', S.categories?.length)
 
+  const fail = (stage: string, err: any) => {
+    const msg = err?.message || String(err || 'Unknown error')
+    console.error(`POST /api/data failed at ${stage}:`, msg)
+    return NextResponse.json({ error: `Save failed at ${stage}`, details: msg }, { status: 500 })
+  }
+
   // Save settings
-  await supabase.from('settings').upsert({
+  const { error: settingsErr } = await supabase.from('settings').upsert({
     user_id: userId,
     theme: S.theme,
     usd_sgd: S.usdSgd,
@@ -179,13 +185,11 @@ export async function POST(request: NextRequest) {
     },
     updated_at: now,
   })
+  if (settingsErr) return fail('settings', settingsErr)
 
   // Save assets
-  // Always delete existing assets, then re-insert if any
-  const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
-  if (delErr) console.error('Asset delete error:', delErr.message)
   if (S.assets?.length) {
-    const { error: insErr } = await supabase.from('assets').insert(S.assets.map((a: any) => ({
+    const { error: upsertErr } = await supabase.from('assets').upsert(S.assets.map((a: any) => ({
       id: a.id, user_id: userId, type: a.type, name: a.name, owner: a.owner,
       value: a.value || 0, ticker: a.ticker, market: a.market,
       shares: a.shares, cost: a.cost, current_price: a.currentPrice,
@@ -193,64 +197,80 @@ export async function POST(request: NextRequest) {
       subtype: a.subtype, my_share: a.myShare,
       include_in_nw: a.includeInNW !== false,
       desc_text: a.desc, locked: a.locked || false, updated_at: now,
-    })))
+    })), { onConflict: 'id' })
+    if (upsertErr) return fail('assets.upsert', upsertErr)
+  } else {
+    const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
+    if (delErr) return fail('assets.delete', delErr)
   }
 
   // Save liabilities
   if (S.liabilities?.length) {
-    await supabase.from('liabilities').delete().eq('user_id', userId)
-    await supabase.from('liabilities').insert(S.liabilities.map((l: any) => ({
+    const { error: liabUpsertErr } = await supabase.from('liabilities').upsert(S.liabilities.map((l: any) => ({
       id: l.id, user_id: userId, name: l.name, type: l.type,
       amount: l.amount, full_amount: l.fullAmount, my_share: l.myShare,
       freq: l.freq, owner: l.owner, notes: l.notes, debit: l.debit,
       updated_at: now,
-    })))
+    })), { onConflict: 'id' })
+    if (liabUpsertErr) return fail('liabilities.upsert', liabUpsertErr)
+  } else {
+    const { error: liabDelErr } = await supabase.from('liabilities').delete().eq('user_id', userId)
+    if (liabDelErr) return fail('liabilities.delete', liabDelErr)
   }
 
   // Save categories
+  const { error: catDelErr } = await supabase.from('categories').delete().eq('user_id', userId)
+  if (catDelErr) return fail('categories.delete', catDelErr)
   if (S.categories?.length) {
-    await supabase.from('categories').delete().eq('user_id', userId)
-    await supabase.from('categories').insert(
+    const { error: catInsErr } = await supabase.from('categories').insert(
       S.categories.map((name: string) => ({ user_id: userId, name }))
     )
+    if (catInsErr) return fail('categories.insert', catInsErr)
   }
 
   // Save cat overrides
+  const { error: ovDelErr } = await supabase.from('cat_overrides').delete().eq('user_id', userId)
+  if (ovDelErr) return fail('cat_overrides.delete', ovDelErr)
   if (S.catOverrides && Object.keys(S.catOverrides).length) {
-    await supabase.from('cat_overrides').delete().eq('user_id', userId)
-    await supabase.from('cat_overrides').insert(
+    const { error: ovInsErr } = await supabase.from('cat_overrides').insert(
       Object.entries(S.catOverrides).map(([txId, cat]) => ({
         user_id: userId, tx_id: parseInt(txId), category: cat
       }))
     )
+    if (ovInsErr) return fail('cat_overrides.insert', ovInsErr)
   }
 
   // Save budgets
-  await supabase.from('budgets').delete().eq('user_id', userId)
+  const { error: budgetDelErr } = await supabase.from('budgets').delete().eq('user_id', userId)
+  if (budgetDelErr) return fail('budgets.delete', budgetDelErr)
   if (S.budgets?.length) {
-    await supabase.from('budgets').insert(
+    const { error: budgetInsErr } = await supabase.from('budgets').insert(
       S.budgets.map((b: any) => ({
         user_id: userId, category: b.category, limit_amount: b.limit
       }))
     )
+    if (budgetInsErr) return fail('budgets.insert', budgetInsErr)
   }
 
   // Save CPF transactions
   if (S.cpfTransactions?.length) {
-    await supabase.from('cpf_transactions').delete().eq('user_id', userId)
-    await supabase.from('cpf_transactions').insert(
+    const { error: cpfUpsertErr } = await supabase.from('cpf_transactions').upsert(
       S.cpfTransactions.map((t: any) => ({
         id: t.id, user_id: userId, date: t.date, description: t.desc,
         amount: t.amount, account: t.account, type: t.type,
         detail: t.detail, editable: t.editable,
-      }))
+      })),
+      { onConflict: 'id' }
     )
+    if (cpfUpsertErr) return fail('cpf_transactions.upsert', cpfUpsertErr)
+  } else {
+    const { error: cpfDelErr } = await supabase.from('cpf_transactions').delete().eq('user_id', userId)
+    if (cpfDelErr) return fail('cpf_transactions.delete', cpfDelErr)
   }
 
   // Save transactions (uploaded from PDF statements)
   if (S.transactions?.length) {
-    await supabase.from('transactions').delete().eq('user_id', userId)
-    const { error: txErr } = await supabase.from('transactions').insert(
+    const { error: txUpsertErr } = await supabase.from('transactions').upsert(
       S.transactions.map((t: any) => ({
         id: t.id,
         user_id: userId,
@@ -262,9 +282,13 @@ export async function POST(request: NextRequest) {
         amount: t.amount || 0,
         default_cat: t.defaultCat,
         category: t.category,
-      }))
+      })),
+      { onConflict: 'id' }
     )
-    if (txErr) console.error('Transaction insert error:', txErr.message)
+    if (txUpsertErr) return fail('transactions.upsert', txUpsertErr)
+  } else {
+    const { error: txDelErr } = await supabase.from('transactions').delete().eq('user_id', userId)
+    if (txDelErr) return fail('transactions.delete', txDelErr)
   }
 
   console.log('POST complete for userId:', userId, 'transactions:', S.transactions?.length || 0)
