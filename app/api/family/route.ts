@@ -84,14 +84,20 @@ async function resolveInviteeByEmail(db: any, admin: any, rawEmail: string) {
     if (!matched) return null
 
     const fullName = matched.user_metadata?.full_name || matched.email || normalized
+    const { data: existingById } = await db
+      .from('user_roles')
+      .select('role, approved_by, approved_at')
+      .eq('user_id', matched.id)
+      .maybeSingle()
+
     await db.from('user_roles').upsert({
       user_id: matched.id,
       email: normalized,
       full_name: fullName,
       avatar_url: matched.user_metadata?.avatar_url || null,
-      role: 'guest',
-      approved_by: null,
-      approved_at: null,
+      role: existingById?.role || 'guest',
+      approved_by: existingById?.approved_by || null,
+      approved_at: existingById?.approved_at || null,
     }, { onConflict: 'user_id' })
 
     return { user_id: matched.id, full_name: fullName, email: normalized }

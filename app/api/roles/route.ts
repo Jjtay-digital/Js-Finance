@@ -120,15 +120,24 @@ export async function POST(request: NextRequest) {
 
   const admin = getAdminSupabase()
   const writer = admin || supabase
-  const { error: updateErr } = await writer.from('user_roles')
+  const { data: updatedRole, error: updateErr } = await writer.from('user_roles')
     .update({ role: newRole, approved_by: user.id, approved_at: new Date().toISOString() })
     .eq('user_id', targetUserId)
+    .select('user_id, role')
+    .maybeSingle()
   if (updateErr) {
     return NextResponse.json({
       error: 'Failed to update role',
       details: updateErr.message,
       hint: 'If RLS blocks this, set SUPABASE_SERVICE_ROLE_KEY for server routes or relax role update policy for owner actions.',
     }, { status: 500 })
+  }
+  if (!updatedRole) {
+    return NextResponse.json({
+      error: 'No role row updated',
+      details: 'Target user role row not found or blocked by RLS.',
+      hint: 'Verify user_roles has this user_id and owner update policy allows this action.',
+    }, { status: 404 })
   }
 
   return NextResponse.json({ ok: true })

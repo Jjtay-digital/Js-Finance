@@ -33,11 +33,17 @@ export default function AdminPage() {
   }
 
   async function changeRole(userId: string, newRole: string) {
-    await fetch('/api/roles', {
+    const res = await fetch('/api/roles', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetUserId: userId, newRole })
     })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      alert(data.error ? `${data.error}${data.details ? `: ${data.details}` : ''}` : 'Failed to update role')
+      await loadUsers()
+      return
+    }
     setUsers(prev => prev.map(u => u.user_id === userId ? {...u, role: newRole} : u))
   }
 

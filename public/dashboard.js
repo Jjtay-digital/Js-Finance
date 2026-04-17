@@ -1954,7 +1954,7 @@ async function saveNewProfile(){
     }else{
       S.profiles=S.profiles.filter(p=>p.id!==profile.id);
       saveS();
-      showToast(d.error||'Could not pair by email');
+      showToast((d.error||'Could not pair by email')+(d.details?': '+d.details:''));
       return;
     }
   }catch(e){
