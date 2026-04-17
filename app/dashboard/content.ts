@@ -347,7 +347,7 @@ export const DASHBOARD_BODY = `<div id="app">
   </div>
 
   <div class="card mb24">
-    <div class="card-header"><div><div class="card-title">CPF Contribution Calculator</div><div class="card-subtitle">Born Oct 1992 &middot; Age 33 &middot; Jan 2026 rates</div></div></div>
+    <div class="card-header"><div><div class="card-title">CPF Contribution Calculator</div><div class="card-subtitle" id="cpf-age-subtitle">Add your date of birth in Settings → Family Profiles to personalize age-based CPF rates.</div></div></div>
     <div class="card-body">
       <div class="info-box">Enter your gross monthly salary to auto-calculate CPF and update peer comparison.</div>
       <div class="cpf-row">

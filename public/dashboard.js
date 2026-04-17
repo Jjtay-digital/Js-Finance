@@ -651,7 +651,10 @@ function init(){
   const self=(S.profiles||[]).find(p=>p.relation==='Self');
   const cpfInput=getEl('cpf-salary');
   if(cpfInput&&self&&self.salary)cpfInput.value=self.salary;
+  const statusSel=getEl('cpf-status');
+  if(statusSel&&self&&self.citizen)statusSel.value=self.citizen;
   try{calcCPF();}catch(e){}
+  loadCPFRates().then(()=>calcCPF());
   try{applyCPFAutoCredit();}catch(e){console.warn('CPF:',e);}
   loadApiKeyDisplay();
   syncHideButtons();
@@ -1247,15 +1250,64 @@ function deleteLiab(){if(!editLiabId)return;S.liabilities=S.liabilities.filter(l
 
 // ── PEER COMPARISON ──────────────────────────────────────────────────────────
 // Cached peer data in state - refreshed via AI web search when requested
+const DEFAULT_CPF_RATE_BANDS=[
+  {status:'sc',minAge:0,maxAge:35,employeeRate:0.20,employerRate:0.17,oaRate:0.23,saRate:0.06,maRate:0.08},
+  {status:'sc',minAge:36,maxAge:45,employeeRate:0.20,employerRate:0.17,oaRate:0.21,saRate:0.07,maRate:0.09},
+  {status:'sc',minAge:46,maxAge:50,employeeRate:0.20,employerRate:0.17,oaRate:0.19,saRate:0.08,maRate:0.10},
+  {status:'sc',minAge:51,maxAge:55,employeeRate:0.20,employerRate:0.17,oaRate:0.15,saRate:0.115,maRate:0.105},
+  {status:'sc',minAge:56,maxAge:60,employeeRate:0.17,employerRate:0.155,oaRate:0.12,saRate:0.095,maRate:0.11},
+  {status:'sc',minAge:61,maxAge:65,employeeRate:0.13,employerRate:0.12,oaRate:0.035,saRate:0.075,maRate:0.14},
+  {status:'sc',minAge:66,maxAge:70,employeeRate:0.075,employerRate:0.09,oaRate:0.01,saRate:0.025,maRate:0.13},
+  {status:'sc',minAge:71,maxAge:200,employeeRate:0.05,employerRate:0.075,oaRate:0.01,saRate:0.01,maRate:0.105},
+];
+let CPF_RATE_BANDS=[...DEFAULT_CPF_RATE_BANDS];
+const selfProfile=()=>S.profiles.find(p=>p.relation==='Self');
 function calcAge(){
-  const jason=S.profiles.find(p=>p.id==='jason'||p.relation==='Self');
-  if(!jason||!jason.dob)return 33;
-  const dob=new Date(jason.dob);const now=new Date();
+  const self=selfProfile();
+  if(!self||!self.dob)return null;
+  const dob=new Date(self.dob),now=new Date();
+  if(Number.isNaN(dob.getTime()))return null;
   return now.getFullYear()-dob.getFullYear()-(now<new Date(now.getFullYear(),dob.getMonth(),dob.getDate())?1:0);
+}
+function setCPFSubtitle(age,status){
+  const el=getEl('cpf-age-subtitle');if(!el)return;
+  const self=selfProfile();
+  if(!self||!self.dob||age===null){
+    el.textContent='Add your date of birth in Settings → Family Profiles to personalize age-based CPF rates.';
+    return;
+  }
+  const born=new Date(self.dob);
+  const bornTxt=born.toLocaleDateString('en-SG',{month:'short',year:'numeric'});
+  el.textContent='Born '+bornTxt+' · Age '+age+' · '+(status==='pr'?'PR':'Singapore Citizen')+' CPF rates';
+}
+function toPct(v){const n=parseFloat(v)||0;return n>1?n/100:n;}
+function findCPFBand(age,status){
+  const st=status==='pr'?'sc':status;
+  return CPF_RATE_BANDS.find(r=>r.status===st&&age>=r.minAge&&age<=r.maxAge)||DEFAULT_CPF_RATE_BANDS[0];
+}
+async function loadCPFRates(){
+  try{
+    const res=await fetch('/api/cpf-rates');
+    if(!res.ok)return;
+    const d=await res.json();
+    if(Array.isArray(d.rates)&&d.rates.length){
+      CPF_RATE_BANDS=d.rates.map(r=>({
+        status:r.status||'sc',
+        minAge:parseInt(r.minAge??r.min_age??0),
+        maxAge:parseInt(r.maxAge??r.max_age??200),
+        employeeRate:toPct(r.employeeRate??r.employee_rate),
+        employerRate:toPct(r.employerRate??r.employer_rate),
+        oaRate:toPct(r.oaRate??r.oa_rate),
+        saRate:toPct(r.saRate??r.sa_rate),
+        maRate:toPct(r.maRate??r.ma_rate),
+      }));
+    }
+  }catch(e){}
 }
 
 function renderPeerComparison(){
   const age=calcAge();
+  const ageForBench=age===null?33:age;
   const salary=parseFloat((S.profiles.find(p=>p.relation==='Self')||{}).salary)||0;
   const housingLiab=S.liabilities.find(l=>(l.type||'').toLowerCase().includes('housing'));
   const hdbBalance=housingLiab?(parseFloat(housingLiab.fullAmount)||parseFloat(housingLiab.amount)||0):0;
@@ -1265,8 +1317,8 @@ function renderPeerComparison(){
   const peer=S.peerData||{sgSalary:5500,sgSavings:30000,sgLoan:280000,updatedAt:null};
 
   // Update age displays
-  document.querySelectorAll('.peer-age-ref').forEach(el=>el.textContent=age);
-  const ageEl=getEl('peer-age');if(ageEl)ageEl.textContent=age;
+  document.querySelectorAll('.peer-age-ref').forEach(el=>el.textContent=ageForBench);
+  const ageEl=getEl('peer-age');if(ageEl)ageEl.textContent=ageForBench;
 
   // Salary card
   setEl('peer-my-salary',salary>0?'~$'+fmtN(salary):'—');
@@ -1314,7 +1366,7 @@ async function refreshPeerData(){
   const btn=getEl('peer-refresh-btn');
   btn.disabled=true;btn.textContent='Searching...';
   setEl('peer-last-upd','Fetching latest stats...');
-  const age=calcAge();
+  const age=calcAge()??33;
   try{
     const resp=await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
@@ -1375,21 +1427,34 @@ async function refreshPeerData(){
 // ── CPF CALC ──// ── CPF CALC ──────────────────────────────────────────────────────────────────
 function calcCPF(){
   const gross=parseFloat(getEl('cpf-salary').value)||0;
-  const self=(S.profiles||[]).find(p=>p.relation==='Self');
+  const self=selfProfile();
+  const status=((getEl('cpf-status')?.value)||(self?.citizen)||'sc').toLowerCase();
+  const age=calcAge();
+  setCPFSubtitle(age,status);
   if(self){
     self.salary=gross>0?String(gross):'';
+    self.citizen=status;
     saveS();
     renderPeerComparison();
   }
   const capped=Math.min(gross,8000);
-  const emp=Math.floor(capped*.20),er=Math.floor(capped*.17),total=emp+er;
-  const oa=Math.floor(total*23/37),sa=Math.floor(total*6/37),ma=total-oa-sa;
+  const band=(age===null||status==='other')?{employeeRate:0,employerRate:0,oaRate:0,saRate:0,maRate:0}:findCPFBand(age,status);
+  const emp=Math.floor(capped*(band.employeeRate||0));
+  const er=Math.floor(capped*(band.employerRate||0));
+  const oa=Math.floor(capped*(band.oaRate||0));
+  const sa=Math.floor(capped*(band.saRate||0));
+  const ma=Math.floor(capped*(band.maRate||0));
+  const total=emp+er;
   getEl('cpf-results').innerHTML=
     '<div class="cpf-result-card"><div class="cpf-result-label">Take-home Cash</div><div class="cpf-result-value text-green">$'+(gross-emp).toFixed(0)+'</div></div>'+
     '<div class="cpf-result-card"><div class="cpf-result-label">OA (Housing)</div><div class="cpf-result-value text-accent">$'+oa+'</div></div>'+
     '<div class="cpf-result-card"><div class="cpf-result-label">SA (Retirement)</div><div class="cpf-result-value" style="color:var(--purple)">$'+sa+'</div></div>'+
     '<div class="cpf-result-card"><div class="cpf-result-label">MA (MediSave)</div><div class="cpf-result-value" style="color:var(--amber)">$'+ma+'</div></div>';
-  getEl('cpf-note').textContent='Gross $'+gross.toLocaleString()+' to Employee CPF $'+emp+' (20%) + Employer CPF $'+er+' (17%) = Total $'+total+'. OA/SA/MA: 62%/16%/22%. OW ceiling $8,000/mth.';
+  const employeePct=((band.employeeRate||0)*100).toFixed(1).replace('.0','');
+  const employerPct=((band.employerRate||0)*100).toFixed(1).replace('.0','');
+  getEl('cpf-note').textContent=(age===null)
+    ?'Enter date of birth in Settings and gross salary above to calculate age-based CPF contribution.'
+    :'Gross $'+gross.toLocaleString()+' → Employee CPF $'+emp+' ('+employeePct+'%) + Employer CPF $'+er+' ('+employerPct+'%) = Total $'+total+'.';
 }
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
@@ -1591,6 +1656,11 @@ function updP(el){
     }else{
       renderPeerComparison();
     }
+  }
+  if(S.profiles[i]&&S.profiles[i].relation==='Self'&&(k==='dob'||k==='citizen')){
+    const statusSel=getEl('cpf-status');
+    if(statusSel&&k==='citizen')statusSel.value=v||'sc';
+    calcCPF();
   }
 }
 function openAddProfileModal(){getEl('pm-name').value='';getEl('pm-dob').value='';getEl('profile-modal').classList.add('open');}
