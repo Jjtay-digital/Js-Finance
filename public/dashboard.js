@@ -506,6 +506,7 @@ if(!S.categories)S.categories=[...DEFAULT_CATS];
 if(!S.catOverrides)S.catOverrides={};
 if(!S.budgets)S.budgets=[];
 if(!S.theme)S.theme=UI_PREFS.theme||'light';
+if(S.shareApiKey===undefined)S.shareApiKey=false;
 if(!S.activePage)S.activePage='monthly';
 if(!S.apiKey)S.apiKey='';
 if(!S.usdSgd)S.usdSgd=1.34;
@@ -667,11 +668,36 @@ function showToast(msg,dur=2500){const t=getEl('toast');t.textContent='✓ '+msg
 function loadApiKeyDisplay() {
   const el = getEl('api-key-input');
   if (el && S.apiKey) el.value = S.apiKey;
+  syncShareApiUI();
 }
 function saveApiKey() {
   const k = (getEl('api-key-input').value || '').trim();
+  if (!k && S.shareApiKey) S.shareApiKey = false;
   S.apiKey = k; saveS();
+  syncShareApiUI();
   showToast(k ? 'API key saved' : 'API key cleared');
+}
+function syncShareApiUI(){
+  const on=!!S.shareApiKey;
+  const toggle=getEl('share-api-toggle');
+  const label=getEl('share-api-label');
+  const status=getEl('share-api-status');
+  if(toggle)toggle.classList.toggle('on',on);
+  if(label)label.textContent=on?'On':'Off';
+  if(status){
+    status.textContent=on?'ON':'OFF';
+    status.style.color=on?'var(--green)':'var(--red)';
+  }
+}
+function toggleShareApiKey(){
+  if(!S.apiKey){
+    showToast('Save your API key first before sharing');
+    return;
+  }
+  S.shareApiKey=!S.shareApiKey;
+  saveS();
+  syncShareApiUI();
+  showToast(S.shareApiKey?'Family sharing enabled':'Family sharing disabled');
 }
 async function testApiKey() {
   const k = (getEl('api-key-input').value || '').trim();

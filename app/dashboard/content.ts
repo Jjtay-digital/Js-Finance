@@ -453,7 +453,17 @@ export const DASHBOARD_BODY = `<div id="app">
         <button class="btn primary" onclick="saveApiKey()">Save Key</button>
         <button class="btn" onclick="testApiKey()">Test</button>
       </div>
-      <p class="section-note" style="margin-top:8px">Your key is stored only in your browser (localStorage). It never leaves your device except to call api.anthropic.com directly.</p>
+      <div class="setting-row" style="margin-top:10px">
+        <div>
+          <div class="setting-name">Share API key with family</div>
+          <div class="setting-desc">When ON, accepted family members can use your shared key for price refresh.</div>
+        </div>
+        <div class="toggle-wrap">
+          <span class="toggle-label" id="share-api-label">Off</span>
+          <button class="toggle" id="share-api-toggle" onclick="toggleShareApiKey()"></button>
+        </div>
+      </div>
+      <p class="section-note" style="margin-top:8px">Share status: <strong id="share-api-status">OFF</strong>. Settings are saved to your Supabase profile.</p>
     </div>
     <div class="settings-section">
       <div class="settings-title">Display</div>
