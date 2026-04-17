@@ -100,6 +100,9 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
             if (s.include_cpf_in_nw != null) w.S.includeCPFinNW = s.include_cpf_in_nw
             if (s.peer_data) {
               w.S.peerData = s.peer_data
+              if (s.peer_data.palette) {
+                w.S.palette = s.peer_data.palette
+              }
               if (Array.isArray(s.peer_data.forexHoldings)) {
                 w.S.forexHoldings = s.peer_data.forexHoldings
               }

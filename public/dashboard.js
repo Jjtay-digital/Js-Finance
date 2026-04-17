@@ -515,6 +515,8 @@ if(S.hidePages.networth===undefined)S.hidePages.networth=false;
 if(!S.dataView)S.dataView='my';
 if(!S.familyCombined)S.familyCombined={assets:[],liabilities:[],transactions:[],members:[]};
 if(!S.familyGroupId)S.familyGroupId=null;
+if(!S.peerData)S.peerData={};
+if(!S.palette)S.palette=S.peerData.palette||'blue';
 const selfName=(window._userName||window._userEmail||'You').toString();
 const selfEmail=(window._userEmail||'').toString();
 if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
@@ -728,6 +730,8 @@ function applyPalette(){
 }
 function setPalette(name){
   S.palette=PALETTES[name]?name:'blue';
+  if(!S.peerData)S.peerData={};
+  S.peerData.palette=S.palette;
   saveS();
   applyPalette();
   rebuildMonthlyChart();
