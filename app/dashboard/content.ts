@@ -230,6 +230,9 @@ export const DASHBOARD_BODY = `<div id="app">
 
 <!-- MONTHLY -->
 <div class="page active" id="page-monthly">
+  <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+    <button class="add-btn" id="monthly-hide-btn" onclick="toggleHidePage('monthly')" title="Hide/Show monthly values">🙈 Hide All</button>
+  </div>
   <div class="stat-grid">
     <div class="stat-card"><div class="stat-label">Total Income</div><div class="stat-value income" id="m-income">$0</div><div class="stat-sub">Salary + receipts</div></div>
     <div class="stat-card"><div class="stat-label">Total Expenses</div><div class="stat-value expense" id="m-expense">$0</div><div class="stat-sub">Tagged spending</div></div>
@@ -296,17 +299,17 @@ export const DASHBOARD_BODY = `<div id="app">
     </div>
   </div>
 
-  <div class="section-hdr"><div class="section-title">&#127974; Bank &amp; Cash</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="bank-subtotal">$0.00</span><button class="add-btn" onclick="openUploadModal()" style="border-color:var(--accent);color:var(--accent)">&#128196; Upload Statement</button><button class="add-btn" onclick="openAssetModal('bank')">+ Add</button></div></div>
+  <div class="section-hdr"><div class="section-title">&#127974; Bank &amp; Cash</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="bank-subtotal">$0.00</span><button class="add-btn" onclick="toggleSectionHide('bank')" id="bank-hide-btn" title="Hide/Show numbers">👁</button><span style="font-size:12px;color:var(--text3)" id="bank-include-label">Included</span><button class="toggle-sm on" id="bank-include-toggle" onclick="toggleSectionInclude('bank')"></button><button class="add-btn" onclick="openUploadModal()" style="border-color:var(--accent);color:var(--accent)">&#128196; Upload Statement</button><button class="add-btn" onclick="openAssetModal('bank')">+ Add</button></div></div>
   <div class="card mb24"><div class="card-body" style="padding:0"><table class="tbl"><thead><tr><th>Account Name</th><th>Owner</th><th style="text-align:right">Balance (SGD)</th><th style="width:80px"></th></tr></thead><tbody id="bank-body"></tbody></table></div></div>
 
-  <div class="section-hdr"><div class="section-title">&#128200; Investments</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="invest-subtotal">$0.00</span><button class="add-btn" onclick="openAssetModal('invest')">+ Add</button></div></div>
+  <div class="section-hdr"><div class="section-title">&#128200; Investments</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="invest-subtotal">$0.00</span><button class="add-btn" onclick="toggleSectionHide('invest')" id="invest-hide-btn" title="Hide/Show numbers">👁</button><span style="font-size:12px;color:var(--text3)" id="invest-include-label">Included</span><button class="toggle-sm on" id="invest-include-toggle" onclick="toggleSectionInclude('invest')"></button><button class="add-btn" onclick="openAssetModal('invest')">+ Add</button></div></div>
   <div class="card mb24"><div class="card-body" style="padding:0">
     <table class="tbl"><thead><tr><th>Name / Ticker</th><th>Type</th><th>Shares</th><th>Cost/Share</th><th>Live Price</th><th style="text-align:right">Value (SGD)</th><th>P&amp;L</th><th style="width:60px"></th></tr></thead>
     <tbody id="invest-body"></tbody></table>
     <div style="padding:10px 16px;border-top:1px solid var(--border)"><p class="section-note">Click any number to edit inline. &#128203; Prices via Claude API (Settings) or enter manually. USD&#10132;SGD rate: <span id="fx-rate">1.34</span></p></div>
   </div></div>
 
-  <div class="section-hdr"><div class="section-title">&#127963; CPF</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="cpf-subtotal">$0.00</span><button class="add-btn" onclick="openAssetModal('cpf')">+ Add</button></div></div>
+  <div class="section-hdr"><div class="section-title">&#127963; CPF</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="cpf-subtotal">$0.00</span><button class="add-btn" onclick="toggleSectionHide('cpf')" id="cpf-hide-btn" title="Hide/Show numbers">👁</button><span style="font-size:12px;color:var(--text3)" id="cpf-include-label">Included</span><button class="toggle-sm on" id="cpf-include-toggle" onclick="toggleSectionInclude('cpf')"></button><button class="add-btn" onclick="openAssetModal('cpf')">+ Add</button></div></div>
   <div class="card mb24"><div class="card-body" style="padding:0">
     <table class="tbl"><thead><tr><th>Owner</th><th style="text-align:right">OA <span style="font-size:10px;opacity:.6">(click to edit)</span></th><th style="text-align:right">SA</th><th style="text-align:right">MA</th><th style="text-align:right">Total</th><th style="width:60px"></th></tr></thead>
     <tbody id="cpf-body"></tbody></table>
@@ -325,13 +328,13 @@ export const DASHBOARD_BODY = `<div id="app">
     <div class="card-body" style="padding:0"><div id="cpf-tx-log"></div></div>
   </div>
 
-  <div class="section-hdr"><div class="section-title">&#127968; Property &amp; Other</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="other-subtotal">$0.00</span><button class="add-btn" onclick="openAssetModal('other')">+ Add</button></div></div>
+  <div class="section-hdr"><div class="section-title">&#127968; Property &amp; Other</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-green" id="other-subtotal">$0.00</span><button class="add-btn" onclick="toggleSectionHide('other')" id="other-hide-btn" title="Hide/Show numbers">👁</button><span style="font-size:12px;color:var(--text3)" id="other-include-label">Included</span><button class="toggle-sm on" id="other-include-toggle" onclick="toggleSectionInclude('other')"></button><button class="add-btn" onclick="openAssetModal('other')">+ Add</button></div></div>
   <div class="card mb24"><div class="card-body" style="padding:0">
     <table class="tbl"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Notes</th><th style="text-align:right">Full Value</th><th style="text-align:right">My Share</th><th>Include in NW?</th><th style="width:60px"></th></tr></thead>
     <tbody id="other-body"></tbody></table>
   </div></div>
 
-  <div class="section-hdr"><div class="section-title" style="color:var(--red)">Liabilities</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-red" id="liab-total">$0.00</span><button class="add-btn" style="border-color:var(--red);color:var(--red)" onclick="openLiabModal(null)">+ Add</button></div></div>
+  <div class="section-hdr"><div class="section-title" style="color:var(--red)">Liabilities</div><div style="display:flex;align-items:center;gap:12px"><span class="section-total text-red" id="liab-total">$0.00</span><button class="add-btn" onclick="toggleSectionHide('liab')" id="liab-hide-btn" title="Hide/Show numbers">👁</button><span style="font-size:12px;color:var(--text3)" id="liab-include-label">Included</span><button class="toggle-sm on" id="liab-include-toggle" onclick="toggleSectionInclude('liab')"></button><button class="add-btn" style="border-color:var(--red);color:var(--red)" onclick="openLiabModal(null)">+ Add</button></div></div>
   <div class="card mb24">
     <div class="card-body" style="padding:0">
       <table class="tbl"><thead><tr><th>Name</th><th>Type</th><th>Owner</th><th>Debit From</th><th>Freq.</th><th style="text-align:right">Amount</th><th>Notes</th><th style="width:60px"></th></tr></thead>
@@ -393,6 +396,7 @@ export const DASHBOARD_BODY = `<div id="app">
     <select class="select-ctrl" id="tx-type" onchange="filterTx()"><option value="all">All Types</option><option value="income">Income</option><option value="expense">Expenses</option><option value="internal">Internal</option></select>
     <select class="select-ctrl" id="tx-cat-filter" onchange="filterTx()"><option value="all">All Categories</option></select>
     <div class="currency-tabs"><button class="currency-tab active" onclick="setCurrency('SGD',this)">SGD</button><button class="currency-tab" onclick="setCurrency('JPY',this)">JPY</button></div>
+    <button class="add-btn" id="tx-hide-btn" onclick="toggleHidePage('transactions')" title="Hide/Show transaction values">🙈 Hide All</button>
   </div>
   <div class="card" id="tx-sgd-card">
     <div class="card-header"><div class="card-title">Transactions &#8212; SGD</div><span style="font-size:13px;color:var(--text3);font-weight:600" id="tx-count"></span></div>

@@ -16,7 +16,7 @@ function renderIncomeSources(){
   let txs=TRANSACTIONS.filter(t=>t.type==='income');
   if(untaggedOnly)txs=txs.filter(t=>t.category==='Unknown');
   const subtitle=getEl('income-sources-subtitle');
-  if(subtitle)subtitle.textContent=untaggedOnly?'Showing untagged only ('+txs.length+' transactions)':'All income ('+txs.length+' transactions)';
+  if(subtitle)subtitle.textContent=untaggedOnly?(isPageHidden('monthly')?'Showing untagged only (•••• transactions)':'Showing untagged only ('+txs.length+' transactions)'):(isPageHidden('monthly')?'All income (•••• transactions)':'All income ('+txs.length+' transactions)');
   if(!txs.length){
     el.innerHTML='<tr><td colspan="6"><div class="empty-state">'+(untaggedOnly?'All income transactions are tagged! Great job.':'No income transactions found.')+'</div></td></tr>';
     return;
@@ -28,7 +28,7 @@ function renderIncomeSources(){
       '<td class="mono text-muted" style="font-size:12px">'+t.date+'</td>'+
       '<td class="fw6">'+t.desc+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+t.source+'</td>'+
-      '<td class="mono text-green fw6">+$'+fmt(t.amount)+'</td>'+
+      '<td class="mono text-green fw6">'+hideVal('monthly','+$'+fmt(t.amount))+'</td>'+
       '<td>'+catBadge+'</td>'+
       '<td>'+(isUnknown?'<button class="btn xs" style="border-color:var(--accent);color:var(--accent)" data-id="'+t.id+'" onclick="quickTagIncome(parseInt(this.dataset.id))">Tag</button>':'')+'</td>'+
     '</tr>';
@@ -79,10 +79,10 @@ function renderPnLHistory(){
     totalInc+=inc;totalExp+=exp;
     html+='<tr>'+
       '<td class="fw6">'+mon+'</td>'+
-      '<td class="mono text-green">+$'+fmt(inc)+'</td>'+
-      '<td class="mono text-red">-$'+fmt(exp)+'</td>'+
-      '<td class="mono fw6 '+(net>=0?'text-green':'text-red')+'">'+(net>=0?'+':'-')+'$'+fmt(Math.abs(net))+'</td>'+
-      '<td class="mono">'+rate+'%</td>'+
+      '<td class="mono text-green">'+hideVal('monthly','+$'+fmt(inc))+'</td>'+
+      '<td class="mono text-red">'+hideVal('monthly','-$'+fmt(exp))+'</td>'+
+      '<td class="mono fw6 '+(net>=0?'text-green':'text-red')+'">'+hideVal('monthly',(net>=0?'+':'-')+'$'+fmt(Math.abs(net)))+'</td>'+
+      '<td class="mono">'+hideVal('monthly',rate+'%')+'</td>'+
       '<td><span class="badge '+(net>=0?'badge-green':'badge-red')+'">'+(net>=0?'Surplus':'Deficit')+'</span></td>'+
     '</tr>';
   });
@@ -91,10 +91,10 @@ function renderPnLHistory(){
   const avgRate=totalInc>0?(totalNet/totalInc*100).toFixed(1):0;
   html+='<tr style="background:var(--surface2);font-weight:700">'+
     '<td class="fw7">3-Month Total</td>'+
-    '<td class="mono text-green fw7">+$'+fmt(totalInc)+'</td>'+
-    '<td class="mono text-red fw7">-$'+fmt(totalExp)+'</td>'+
-    '<td class="mono fw7 '+(totalNet>=0?'text-green':'text-red')+'">'+(totalNet>=0?'+':'-')+'$'+fmt(Math.abs(totalNet))+'</td>'+
-    '<td class="mono fw7">'+avgRate+'%</td>'+
+    '<td class="mono text-green fw7">'+hideVal('monthly','+$'+fmt(totalInc))+'</td>'+
+    '<td class="mono text-red fw7">'+hideVal('monthly','-$'+fmt(totalExp))+'</td>'+
+    '<td class="mono fw7 '+(totalNet>=0?'text-green':'text-red')+'">'+hideVal('monthly',(totalNet>=0?'+':'-')+'$'+fmt(Math.abs(totalNet)))+'</td>'+
+    '<td class="mono fw7">'+hideVal('monthly',avgRate+'%')+'</td>'+
     '<td><span class="badge '+(totalNet>=0?'badge-green':'badge-red')+'">'+(totalNet>=0?'Surplus':'Deficit')+'</span></td>'+
   '</tr>';
   el.innerHTML=html;
@@ -481,6 +481,15 @@ if(S.incomeUntaggedOnly===undefined)S.incomeUntaggedOnly=false;
 if(S.includeCPFinNW===undefined)S.includeCPFinNW=true;
 if(!S.pricesTs)S.pricesTs=null;
 if(!S.cpfTransactions)S.cpfTransactions=[];
+if(!S.sectionPrefs)S.sectionPrefs={};
+['bank','invest','cpf','other','liab'].forEach(k=>{
+  if(!S.sectionPrefs[k])S.sectionPrefs[k]={include:true,hide:false};
+  if(S.sectionPrefs[k].include===undefined)S.sectionPrefs[k].include=true;
+  if(S.sectionPrefs[k].hide===undefined)S.sectionPrefs[k].hide=false;
+});
+if(!S.hidePages)S.hidePages={monthly:false,transactions:false};
+if(S.hidePages.monthly===undefined)S.hidePages.monthly=false;
+if(S.hidePages.transactions===undefined)S.hidePages.transactions=false;
 if(!S.profiles)S.profiles=[
   {id:'jason',name:'Jason Tay Zhi Hui',relation:'Self',dob:'1992-10-01',citizen:'sc',salary:'5000',employer:'SHA2 Labs Pte Ltd',email:'jasontayzh@gmail.com'},
   {id:'sally',name:'Sally Tan Cai Feng',relation:'Wife',dob:'',citizen:'sc',salary:'',employer:'',email:''},
@@ -503,6 +512,45 @@ const fmt=(n,d=2)=>{const v=parseFloat(n)||0;return v.toLocaleString('en-SG',{mi
 const fmtN=n=>{const v=parseFloat(n)||0;return v.toLocaleString('en-SG',{maximumFractionDigits:0});};
 const setEl=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
 const getEl=id=>document.getElementById(id);
+const sectionIncluded=key=>!!(S.sectionPrefs[key]&&S.sectionPrefs[key].include);
+const sectionHidden=key=>!!(S.sectionPrefs[key]&&S.sectionPrefs[key].hide);
+const showAmt=(key,val)=>sectionHidden(key)?'••••':val;
+const isPageHidden=page=>!!(S.hidePages&&S.hidePages[page]);
+const hideVal=(page,val)=>isPageHidden(page)?'••••':val;
+
+function syncSectionControls(){
+  ['bank','invest','cpf','other','liab'].forEach(k=>{
+    const t=getEl(k+'-include-toggle'),l=getEl(k+'-include-label'),h=getEl(k+'-hide-btn');
+    const on=sectionIncluded(k);
+    if(t)t.classList.toggle('on',on);
+    if(l)l.textContent=on?'Included':'Excluded';
+    if(h)h.style.opacity=sectionHidden(k)?'1':'0.8';
+  });
+}
+function toggleSectionInclude(key){
+  S.sectionPrefs[key].include=!S.sectionPrefs[key].include;
+  if(key==='cpf')S.includeCPFinNW=S.sectionPrefs[key].include;
+  saveS();
+  renderNW();rebuildNWChart();
+}
+function toggleSectionHide(key){
+  S.sectionPrefs[key].hide=!S.sectionPrefs[key].hide;
+  saveS();
+  renderNW();
+}
+function syncHideButtons(){
+  const mb=getEl('monthly-hide-btn');
+  if(mb)mb.textContent=isPageHidden('monthly')?'👁 Show All':'🙈 Hide All';
+  const tb=getEl('tx-hide-btn');
+  if(tb)tb.textContent=isPageHidden('transactions')?'👁 Show All':'🙈 Hide All';
+}
+function toggleHidePage(page){
+  S.hidePages[page]=!S.hidePages[page];
+  saveS();
+  syncHideButtons();
+  if(page==='monthly')calcSummary();
+  if(page==='transactions')filterTx();
+}
 
 // ── ASSET VALUE ───────────────────────────────────────────────────────────────
 function assetVal(a){
@@ -596,6 +644,7 @@ function init(){
   try{calcCPF();}catch(e){}
   try{applyCPFAutoCredit();}catch(e){console.warn('CPF:',e);}
   loadApiKeyDisplay();
+  syncHideButtons();
   const tab=document.querySelector('.nav-tab[data-page="'+S.activePage+'"]');
   if(tab)showPage(S.activePage,tab);
   // Scroll-to-top button
@@ -634,10 +683,10 @@ function calcSummary(){
   const inc=TRANSACTIONS.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const exp=TRANSACTIONS.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
   const net=inc-exp;const rate=inc>0?(net/inc*100).toFixed(1):0;
-  setEl('m-income','+$'+fmt(inc));setEl('m-expense','-$'+fmt(exp));
+  setEl('m-income',hideVal('monthly','+$'+fmt(inc)));setEl('m-expense',hideVal('monthly','-$'+fmt(exp)));
   const ne=getEl('m-net');
-  if(ne){ne.textContent=(net>=0?'+':'-')+'$'+fmt(Math.abs(net));ne.className='stat-value '+(net>=0?'net-pos':'net-neg');}
-  setEl('m-rate',rate+'%');
+  if(ne){ne.textContent=hideVal('monthly',(net>=0?'+':'-')+'$'+fmt(Math.abs(net)));ne.className='stat-value '+(net>=0?'net-pos':'net-neg');}
+  setEl('m-rate',hideVal('monthly',rate+'%'));
   getEl('pnl-history').innerHTML=
     '<tr><td class="fw6">March 2026</td><td class="mono text-green">+$'+fmt(inc)+'</td><td class="mono text-red">-$'+fmt(exp)+'</td>'+
     '<td class="mono fw6 '+(net>=0?'text-green':'text-red')+'">'+(net>=0?'+':'-')+'$'+fmt(Math.abs(net))+'</td>'+
@@ -654,7 +703,7 @@ function buildCatBreakdown(total){
       '<div class="cat-dot" style="background:'+col+'"></div>'+
       '<div class="cat-name">'+icon+' '+cat+'</div>'+
       '<div class="cat-bar-wrap"><div class="cat-bar" style="width:'+pct+'%;background:'+col+'"></div></div>'+
-      '<div class="cat-amount">$'+fmt(amt)+'</div>'+
+      '<div class="cat-amount">'+hideVal('monthly','$'+fmt(amt))+'</div>'+
     '</div>';
   }).join('');
 }
@@ -666,9 +715,9 @@ function renderBudgets(){
     const spent=map[b.category]||0,pct=Math.min(spent/b.limit*100,100).toFixed(0);
     const over=spent>b.limit,warn=!over&&pct>=80,rem=b.limit-spent;
     return '<div class="budget-card"><div class="budget-card-hdr"><div class="budget-name">'+b.category+'</div><button class="budget-edit-btn" data-i="'+i+'" onclick="openEditBudget(parseInt(this.dataset.i))">✎</button></div>'+
-      '<div class="budget-amounts"><span class="budget-spent '+(over?'text-red':'text-green')+'">$'+fmt(spent)+'</span><span class="budget-limit">of $'+fmt(b.limit)+'</span></div>'+
+      '<div class="budget-amounts"><span class="budget-spent '+(over?'text-red':'text-green')+'">'+hideVal('monthly','$'+fmt(spent))+'</span><span class="budget-limit">'+hideVal('monthly','of $'+fmt(b.limit))+'</span></div>'+
       '<div class="budget-progress"><div class="budget-bar '+(over?'over':warn?'warn':'ok')+'" style="width:'+pct+'%"></div></div>'+
-      '<div class="budget-footer"><span style="color:var(--text3)">'+pct+'% used</span><span style="color:'+(over?'var(--red)':warn?'var(--amber)':'var(--green)')+'">'+(over?'Over $'+fmt(Math.abs(rem)):'$'+fmt(rem)+' left')+'</span></div></div>';
+      '<div class="budget-footer"><span style="color:var(--text3)">'+hideVal('monthly',pct+'% used')+'</span><span style="color:'+(over?'var(--red)':warn?'var(--amber)':'var(--green)')+'">'+hideVal('monthly',(over?'Over $'+fmt(Math.abs(rem)):'$'+fmt(rem)+' left'))+'</span></div></div>';
   }).join('')+'<button class="add-dashed" onclick="openBudgetModal()">+ Add Budget</button>';
 }
 function openBudgetModal(){editBudgetIdx=null;getEl('bm-title').textContent='Add Budget';getEl('bm-del').style.display='none';getEl('bm-amount').value='';populateBudgetCats();getEl('budget-modal').classList.add('open');}
@@ -683,18 +732,18 @@ function renderNW(){
   // BANK
   const banks=S.assets.filter(a=>a.type==='bank');
   const bankTotal=banks.reduce((s,a)=>s+assetVal(a),0);
-  setEl('bank-subtotal','$'+fmt(bankTotal));
+  setEl('bank-subtotal',showAmt('bank','$'+fmt(bankTotal)));
   getEl('bank-body').innerHTML=banks.length?banks.map(a=>
     '<tr><td class="fw6">'+a.name+'</td>'+
     '<td style="color:var(--text3);font-size:13px">'+a.owner+'</td>'+
-    '<td style="text-align:right">'+inlineVal('bank',a.id,'value',a.value,'$'+fmt(a.value))+'</td>'+
+    '<td style="text-align:right">'+(sectionHidden('bank')?showAmt('bank','$'+fmt(a.value)):inlineVal('bank',a.id,'value',a.value,'$'+fmt(a.value)))+'</td>'+
     '<td>'+(a.locked?'<span class="text-muted" style="font-size:11px">From stmt</span>':eBtn(a.id))+'</td></tr>'
   ).join(''):'<tr><td colspan="4"><div class="empty-state">No bank accounts added</div></td></tr>';
 
   // INVESTMENTS — VALUE CALCULATED FROM SHARES x PRICE
   const invests=S.assets.filter(a=>a.type==='stock'||a.type==='etf');
   const investTotal=invests.reduce((s,a)=>s+assetVal(a),0);
-  setEl('invest-subtotal','$'+fmt(investTotal));
+  setEl('invest-subtotal',showAmt('invest','$'+fmt(investTotal)));
   setEl('fx-rate',fmt(parseFloat(S.usdSgd)||1.34,4));
   getEl('invest-body').innerHTML=invests.length?invests.map(a=>{
     const shares=parseFloat(a.shares)||0;
@@ -706,14 +755,14 @@ function renderNW(){
     const costSGD=a.market==='US'?shares*cost*fxRate:shares*cost;
     const gain=valSGD-costSGD;
     const pct=costSGD>0?(gain/costSGD*100).toFixed(1):0;
-    const priceDisp=price>0?'$'+price.toFixed(2):'<span class="price-pending">Fetch needed</span>';
-    const valDisp=valSGD>0?'$'+fmt(valSGD):'<span class="text-muted">—</span>';
-    const plDisp=shares>0&&price>0&&cost>0?'<span class="mono fw6 '+(gain>=0?'text-green':'text-red')+'">'+(gain>=0?'+':'-')+'$'+fmt(Math.abs(gain))+' ('+(gain>=0?'+':'')+pct+'%)</span>':'<span class="text-muted">—</span>';
+    const priceDisp=sectionHidden('invest')?showAmt('invest','$'+price.toFixed(2)):(price>0?'$'+price.toFixed(2):'<span class="price-pending">Fetch needed</span>');
+    const valDisp=sectionHidden('invest')?showAmt('invest','$'+fmt(valSGD)):(valSGD>0?'$'+fmt(valSGD):'<span class="text-muted">—</span>');
+    const plDisp=sectionHidden('invest')?showAmt('invest','$'+fmt(Math.abs(gain))):shares>0&&price>0&&cost>0?'<span class="mono fw6 '+(gain>=0?'text-green':'text-red')+'">'+(gain>=0?'+':'-')+'$'+fmt(Math.abs(gain))+' ('+(gain>=0?'+':'')+pct+'%)</span>':'<span class="text-muted">—</span>';
     return '<tr>'+
       '<td><div class="fw7">'+a.name+'</div><div style="font-size:12px;color:var(--text3)">'+a.ticker+'</div></td>'+
       '<td><span class="badge '+(a.type==='etf'?'badge-purple':'badge-green')+'">'+(a.type==='etf'?'ETF':'Stock')+'</span></td>'+
-      '<td>'+inlineVal('invest',a.id,'shares',shares,shares||'0')+'</td>'+
-      '<td>'+inlineVal('invest',a.id,'cost',cost,cost?'$'+cost.toFixed(2):'—')+'</td>'+
+      '<td>'+(sectionHidden('invest')?showAmt('invest',shares||'0'):inlineVal('invest',a.id,'shares',shares,shares||'0'))+'</td>'+
+      '<td>'+(sectionHidden('invest')?showAmt('invest',cost?'$'+cost.toFixed(2):'—'):inlineVal('invest',a.id,'cost',cost,cost?'$'+cost.toFixed(2):'—'))+'</td>'+
       '<td class="mono" style="font-size:13px">'+priceDisp+'<div class="price-tag">'+a.market+' · live</div></td>'+
       '<td class="mono fw6 text-green" style="text-align:right">'+valDisp+'</td>'+
       '<td>'+plDisp+'</td>'+
@@ -723,15 +772,15 @@ function renderNW(){
   // CPF
   const cpfs=S.assets.filter(a=>a.type==='cpf');
   const cpfTotal=cpfs.reduce((s,a)=>s+assetVal(a),0);
-  setEl('cpf-subtotal','$'+fmt(cpfTotal));
+  setEl('cpf-subtotal',showAmt('cpf','$'+fmt(cpfTotal)));
   getEl('cpf-body').innerHTML=cpfs.length?cpfs.map(a=>{
     const total=(parseFloat(a.cpfOA)||0)+(parseFloat(a.cpfSA)||0)+(parseFloat(a.cpfMA)||0);
     return '<tr>'+
       '<td class="fw6">'+a.owner+'</td>'+
-      '<td style="text-align:right">'+inlineVal('cpf',a.id,'cpfOA',a.cpfOA,'$'+fmt(a.cpfOA||0),'text-accent')+'</td>'+
-      '<td style="text-align:right">'+inlineVal('cpf',a.id,'cpfSA',a.cpfSA,'$'+fmt(a.cpfSA||0),'')+'</td>'+
-      '<td style="text-align:right">'+inlineVal('cpf',a.id,'cpfMA',a.cpfMA,'$'+fmt(a.cpfMA||0),'')+'</td>'+
-      '<td class="mono fw6 text-green" style="text-align:right">$'+fmt(total)+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfOA||0)):inlineVal('cpf',a.id,'cpfOA',a.cpfOA,'$'+fmt(a.cpfOA||0),'text-accent'))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfSA||0)):inlineVal('cpf',a.id,'cpfSA',a.cpfSA,'$'+fmt(a.cpfSA||0),''))+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('cpf')?showAmt('cpf','$'+fmt(a.cpfMA||0)):inlineVal('cpf',a.id,'cpfMA',a.cpfMA,'$'+fmt(a.cpfMA||0),''))+'</td>'+
+      '<td class="mono fw6 text-green" style="text-align:right">'+showAmt('cpf','$'+fmt(total))+'</td>'+
       '<td>'+eBtn(a.id)+'</td></tr>';
   }).join(''):'<tr><td colspan="6"><div class="empty-state">No CPF added</div></td></tr>';
 
@@ -739,7 +788,7 @@ function renderNW(){
   const others=S.assets.filter(a=>a.type==='property'||a.type==='other');
   const otherTotalForDisplay=others.reduce((s,a)=>{const raw=parseFloat(a.value)||0;const share=a.myShare!=null?parseFloat(a.myShare):1;return s+(isNaN(raw*share)?0:raw*share);},0);
   const otherTotalInNW=others.reduce((s,a)=>s+assetVal(a),0);
-  setEl('other-subtotal','$'+fmt(otherTotalInNW)+' in NW');
+  setEl('other-subtotal',showAmt('other','$'+fmt(otherTotalForDisplay)));
   const typeLabels={property:'Property',srs:'SRS',gold:'Gold',insurance:'Insurance CV',other:'Other'};
   const typeCls={property:'badge-teal',srs:'badge-amber',gold:'badge-amber',insurance:'badge-blue',other:''};
   getEl('other-body').innerHTML=others.length?others.map(a=>{
@@ -753,14 +802,16 @@ function renderNW(){
       '<td><span class="badge '+(typeCls[sub]||'')+'">'+typeLabels[sub]+'</span></td>'+
       '<td style="color:var(--text3);font-size:13px">'+a.owner+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+a.notes+'</td>'+
-      '<td style="text-align:right">'+inlineVal('other',a.id,'value',raw,valDisp)+'</td>'+
-      '<td class="mono fw6 '+(inc?'text-green':'text-muted')+'" style="text-align:right">'+shareDisp+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('other')?showAmt('other',valDisp):inlineVal('other',a.id,'value',raw,valDisp))+'</td>'+
+      '<td class="mono fw6 '+(inc?'text-green':'text-muted')+'" style="text-align:right">'+showAmt('other',shareDisp)+'</td>'+
       '<td style="text-align:center"><button class="toggle-sm'+(inc?' on':'')+'" data-id="'+a.id+'" onclick="togglePropertyNW(this)" title="'+(inc?'Included in NW':'Excluded from NW')+'"></button><div style="font-size:10px;margin-top:4px;color:var(--text3)">'+(inc?'Included':'Excluded')+'</div></td>'+
       '<td>'+eBtn(a.id)+'</td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty-state">No property or other assets</div></td></tr>';
 
   // LIABILITIES
   const debitDisp=v=>({'cpf-oa':'CPF OA','cpf-sa':'CPF SA','cpf-ma':'CPF MA','bank-dbs':'DBS','bank-uob':'UOB','bank-ocbc':'OCBC'}[v]||v||'—');
+  const liabTotal=S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  setEl('liab-total',showAmt('liab','$'+fmt(liabTotal)));
   getEl('liab-body').innerHTML=S.liabilities.length?S.liabilities.map(l=>{
     const hasShare=l.myShare!=null&&l.myShare<1;
     const amtDisp=hasShare&&l.fullAmount?
@@ -773,7 +824,7 @@ function renderNW(){
       '<td style="font-size:13px;color:var(--text3)">'+l.owner+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+debitDisp(l.debit)+'</td>'+
       '<td style="font-size:13px;color:var(--text3)">'+l.freq+'</td>'+
-      '<td style="text-align:right">'+amtDisp+'</td>'+
+      '<td style="text-align:right">'+(sectionHidden('liab')?showAmt('liab','$'+fmt(l.amount)):amtDisp)+'</td>'+
       '<td style="font-size:12px;color:var(--text3)">'+l.notes+'</td>'+
       '<td>'+lBtn(l.id)+'</td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty-state">No liabilities</div></td></tr>';
@@ -781,6 +832,7 @@ function renderNW(){
   updateNWTotals();
   renderCPFLog();
   syncCPFToggleUI();
+  syncSectionControls();
   renderPeerComparison();
 }
 
@@ -795,8 +847,12 @@ function togglePropertyNW(btn){
 
 // ── NW TOTALS ─────────────────────────────────────────────────────────────────
 function updateNWTotals(){
-  const totalAssets=S.assets.reduce((s,a)=>s+assetVal(a),0);
-  const totalLiab=S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0);
+  const bankAssets=sectionIncluded('bank')?S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+(parseFloat(a.value)||0),0):0;
+  const investAssets=sectionIncluded('invest')?S.assets.filter(a=>a.type==='stock'||a.type==='etf').reduce((s,a)=>s+assetVal(a),0):0;
+  const cpfAssets=sectionIncluded('cpf')&&S.includeCPFinNW?S.assets.filter(a=>a.type==='cpf').reduce((s,a)=>s+(parseFloat(a.cpfOA)||0)+(parseFloat(a.cpfSA)||0)+(parseFloat(a.cpfMA)||0),0):0;
+  const otherAssets=sectionIncluded('other')?S.assets.filter(a=>a.type==='property'||a.type==='other').reduce((s,a)=>s+assetVal(a),0):0;
+  const totalAssets=bankAssets+investAssets+cpfAssets+otherAssets;
+  const totalLiab=sectionIncluded('liab')?S.liabilities.reduce((s,l)=>s+(parseFloat(l.amount)||0),0):0;
   const nw=totalAssets-totalLiab;
   setEl('assets-total'&&'nw-val',(a=>a)(''));
   setEl('nw-val',(nw>=0?'+':'-')+'$'+fmt(Math.abs(nw)));
@@ -843,10 +899,12 @@ function applyCPFAutoCredit(){
 }
 function toggleCPFinNW(){
   S.includeCPFinNW=!S.includeCPFinNW;saveS();
+  S.sectionPrefs.cpf.include=!!S.includeCPFinNW;
   const btn=getEl('cpf-nw-toggle'),lbl=getEl('cpf-nw-label');
   if(btn) btn.classList.toggle('on',S.includeCPFinNW);
   if(lbl) lbl.textContent=S.includeCPFinNW?'Included':'Excluded';
   updateNWTotals();rebuildNWChart();
+  syncSectionControls();
   showToast('CPF '+(S.includeCPFinNW?'included in':'excluded from')+' net worth');
 }
 function syncCPFToggleUI(){
@@ -1366,7 +1424,7 @@ function filterTx(){
     }
     return true;
   });
-  setEl('tx-count',filtered.length+' transactions');
+  setEl('tx-count',isPageHidden('transactions')?'•••• transactions':filtered.length+' transactions');
   const body=getEl('tx-body');
   if(!filtered.length){body.innerHTML='<tr><td colspan="5"><div class="empty-state">No transactions match</div></td></tr>';return;}
   const sortedByType={income:[],expense:[],internal:[]};
@@ -1401,7 +1459,7 @@ function filterTx(){
       '<td class="mono text-muted" style="font-size:12px">'+tx.date+'</td>'+
       '<td><span class="type-dot '+dc+'"></span>'+uf+'<span style="font-weight:600">'+tx.desc+'</span></td>'+
       '<td class="text-muted" style="font-size:12px">'+tx.source+'</td>'+
-      '<td class="mono" style="text-align:right;font-weight:700;color:'+amtColor+'">'+sg+'$'+fmt(tx.amount)+'</td>'+
+      '<td class="mono" style="text-align:right;font-weight:700;color:'+amtColor+'">'+hideVal('transactions',sg+'$'+fmt(tx.amount))+'</td>'+
       '<td>'+catWrap+'</td>'+
     '</tr>';
   });
