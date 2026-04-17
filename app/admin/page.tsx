@@ -15,13 +15,13 @@ export default function AdminPage() {
   const [myRole, setMyRole] = useState('')
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     loadUsers()
   }, [])
 
   async function loadUsers() {
+    const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push('/auth/login'); return }
     const res = await fetch('/api/roles?list=true')

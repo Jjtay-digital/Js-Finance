@@ -8,10 +8,10 @@ export default function DashboardPage() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     async function checkAuth() {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
       const roleRes = await fetch('/api/roles')
@@ -33,10 +33,10 @@ export default function DashboardPage() {
     </div>
   )
 
-  return <DashboardApp user={user} supabase={supabase} />
+  return <DashboardApp user={user} />
 }
 
-function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
+function DashboardApp({ user }: { user: any }) {
   const loaded = useRef(false)
 
   useEffect(() => {
@@ -167,7 +167,7 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
   }, [])
 
   async function handleSignOut() {
-    await supabase.auth.signOut()
+    await createClient().auth.signOut()
     window.location.href = '/auth/login'
   }
 

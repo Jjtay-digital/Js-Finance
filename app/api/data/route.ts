@@ -248,8 +248,8 @@ export async function POST(request: NextRequest) {
   const { error: catDelErr } = await supabase.from('categories').delete().eq('user_id', userId)
   if (catDelErr) return fail('categories.delete', catDelErr)
   if (S.categories?.length) {
-    const cleanedCategories = Array.from(
-      new Set(
+    const cleanedCategories: string[] = Array.from(
+      new Set<string>(
         S.categories
           .map((name: any) => String(name || '').trim())
           .filter((name: string) => name.length > 0)
@@ -267,7 +267,7 @@ export async function POST(request: NextRequest) {
   if (S.catOverrides && Object.keys(S.catOverrides).length) {
     const { error: ovInsErr } = await supabase.from('cat_overrides').insert(
       Object.entries(S.catOverrides).map(([txId, cat]) => ({
-        user_id: userId, tx_id: parseInt(txId), category: cat
+        user_id: userId, tx_id: parseInt(txId), category: String(cat ?? '')
       }))
     )
     if (ovInsErr) return fail('cat_overrides.insert', ovInsErr)

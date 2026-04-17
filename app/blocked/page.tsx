@@ -2,8 +2,6 @@
 import { createClient } from '@/lib/supabase'
 
 export default function BlockedPage() {
-  const supabase = createClient()
-
   return (
     <div style={{
       minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center',
@@ -22,7 +20,7 @@ export default function BlockedPage() {
           Contact Jason if you believe this is a mistake.
         </p>
         <button
-          onClick={() => supabase.auth.signOut().then(() => window.location.href = '/auth/login')}
+          onClick={() => createClient().auth.signOut().then(() => window.location.href = '/auth/login')}
           style={{
             padding:'12px 24px', background:'#4361ee', color:'white',
             border:'none', borderRadius:'8px', cursor:'pointer',
