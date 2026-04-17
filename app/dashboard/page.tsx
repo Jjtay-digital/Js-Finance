@@ -47,6 +47,7 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     w._userId = user.id
     w._userEmail = user.email
     w._userName = user.user_metadata?.full_name || user.email
+    w.__dashboardHydrated = false
 
     // Ensure no stale in-memory dashboard state survives user switches.
     delete w.S
@@ -64,6 +65,8 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
       if (orig) {
         w.saveS = function() {
           orig()
+          // Prevent destructive early writes before initial server hydration completes.
+          if (!w.__dashboardHydrated) return
           // Include transactions in save (they live in window.TRANSACTIONS not window.S)
         const stateWithTx = { ...w.S, transactions: w.TRANSACTIONS || [] }
         fetch('/api/data', {
@@ -122,8 +125,12 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
             if (w.loadApiKeyDisplay)  w.loadApiKeyDisplay()
             if (w.loadAlphaKeyDisplay) w.loadAlphaKeyDisplay()
           }
+          w.__dashboardHydrated = true
         })
-        .catch(() => {})
+        .catch(() => {
+          // If fetch fails, keep sync disabled to avoid wiping server state.
+          w.__dashboardHydrated = false
+        })
 
       // 4. Show user info
       const nameEl = document.getElementById('user-display-name')
