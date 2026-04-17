@@ -169,7 +169,10 @@ export async function POST(request: NextRequest) {
     api_key: S.apiKey,
     alpha_vantage_key: S.alphaVantageKey,
     share_api_key: S.shareApiKey || false,
-    peer_data: S.peerData,
+    peer_data: {
+      ...(S.peerData || {}),
+      forexHoldings: S.forexHoldings || [],
+    },
     updated_at: now,
   })
 

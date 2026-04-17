@@ -398,17 +398,14 @@ export const DASHBOARD_BODY = `<div id="app">
     </select>
     <select class="select-ctrl" id="tx-type" onchange="filterTx()"><option value="all">All Types</option><option value="income">Income</option><option value="expense">Expenses</option><option value="internal">Internal</option></select>
     <select class="select-ctrl" id="tx-cat-filter" onchange="filterTx()"><option value="all">All Categories</option></select>
-    <div class="currency-tabs"><button class="currency-tab active" onclick="setCurrency('SGD',this)">SGD</button><button class="currency-tab" onclick="setCurrency('JPY',this)">JPY</button></div>
+    <div class="currency-tabs" id="tx-currency-tabs"></div>
     <button class="add-btn" id="tx-hide-btn" onclick="toggleHidePage('transactions')" title="Hide/Show transaction values">🙈 Hide All</button>
   </div>
-  <div class="card" id="tx-sgd-card">
+  <div class="card tx-currency-card" id="tx-sgd-card" data-currency="SGD">
     <div class="card-header"><div class="card-title">Transactions &#8212; SGD</div><span style="font-size:13px;color:var(--text3);font-weight:600" id="tx-count"></span></div>
     <div style="overflow-x:auto"><table class="tx-table"><thead><tr><th>Date</th><th>Description</th><th>Source</th><th style="text-align:right">Amount</th><th>Category</th></tr></thead><tbody id="tx-body"></tbody></table></div>
   </div>
-  <div class="card" id="tx-jpy-card" style="display:none;margin-top:16px">
-    <div class="card-header"><div class="card-title">JPY Holdings</div></div>
-    <div class="card-body"><table class="tbl"><thead><tr><th>Account</th><th>Balance (JPY)</th><th>SGD Equiv.</th><th>Rate</th><th>As Of</th></tr></thead><tbody><tr><td class="fw6">DBS Multiplier 120-322751-6</td><td class="mono fw6">&#165;239,222</td><td class="mono text-green fw6">~$1,889.85</td><td class="mono text-muted">0.0079</td><td class="text-muted">31 Mar 2026</td></tr></tbody></table></div>
-  </div>
+  <div id="tx-foreign-cards"></div>
 </div>
 
 <!-- SETTINGS -->

@@ -48,8 +48,15 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
     w._userEmail = user.email
     w._userName = user.user_metadata?.full_name || user.email
 
+    // Ensure no stale in-memory dashboard state survives user switches.
+    delete w.S
+    delete w.TRANSACTIONS
+    const oldScript = document.getElementById('dashboard-script')
+    if (oldScript) oldScript.remove()
+
     // 1. Load dashboard.js (sets window.S from localStorage)
     const script = document.createElement('script')
+    script.id = 'dashboard-script'
     script.src = '/dashboard.js'
     script.onload = () => {
       // 2. Now patch saveS to also sync to Supabase
@@ -73,20 +80,16 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
         .then(d => {
           if (!w.S) return
           let changed = false
-          if (d.assets?.length)      { w.S.assets = d.assets; changed = true }
-          if (d.liabilities?.length) { w.S.liabilities = d.liabilities; changed = true }
-          if (d.categories?.length)  { w.S.categories = d.categories }
-          if (d.budgets?.length)     { w.S.budgets = d.budgets }
-          if (d.cpfTxs?.length)      { w.S.cpfTransactions = d.cpfTxs }
-          if (d.catOverrides && Object.keys(d.catOverrides).length) {
-            w.S.catOverrides = d.catOverrides
-          }
-          // Load transactions - replace TRANSACTIONS array
-          if (d.transactions && d.transactions.length > 0) {
-            w.TRANSACTIONS = d.transactions
-            if (w.filterTx) w.filterTx()
-            if (w.calcSummary) w.calcSummary()
-          }
+          // Always set arrays/objects from server response (including empty),
+          // so one user's data can never leak into another session.
+          w.S.assets = d.assets || []
+          w.S.liabilities = d.liabilities || []
+          w.S.categories = d.categories || []
+          w.S.budgets = d.budgets || []
+          w.S.cpfTransactions = d.cpfTxs || []
+          w.S.catOverrides = d.catOverrides || {}
+          w.TRANSACTIONS = d.transactions || []
+          changed = true
           if (d.settings) {
             const s = d.settings
             if (s.theme)                  w.S.theme = s.theme
@@ -95,7 +98,12 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
             if (s.alpha_vantage_key)     w.S.alphaVantageKey = s.alpha_vantage_key
             if (s.share_api_key != null) w.S.shareApiKey = s.share_api_key
             if (s.include_cpf_in_nw != null) w.S.includeCPFinNW = s.include_cpf_in_nw
-            if (s.peer_data)             w.S.peerData = s.peer_data
+            if (s.peer_data) {
+              w.S.peerData = s.peer_data
+              if (Array.isArray(s.peer_data.forexHoldings)) {
+                w.S.forexHoldings = s.peer_data.forexHoldings
+              }
+            }
             changed = true
           }
           if (d.sharedApiKey)   w._sharedApiKey = d.sharedApiKey
@@ -103,6 +111,7 @@ function DashboardApp({ user, supabase }: { user: any, supabase: any }) {
           if (changed) {
             if (w.renderNW)    w.renderNW()
             if (w.calcSummary) w.calcSummary()
+            if (w.filterTx)    w.filterTx()
             if (w.applyTheme)  w.applyTheme()
             if (w.loadApiKeyDisplay)  w.loadApiKeyDisplay()
             if (w.loadAlphaKeyDisplay) w.loadAlphaKeyDisplay()

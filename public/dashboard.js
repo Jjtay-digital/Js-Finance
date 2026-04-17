@@ -344,6 +344,24 @@ function applyParsedStatement(parsed,bankId,monthName,year){
       updated=true;
     }
   }
+  // Add/update foreign-currency holdings cards only when statement is non-SGD.
+  const currency=(parsed.currency||'SGD').toUpperCase();
+  if(currency!=='SGD'&&parsed.closingBalance>0){
+    const accountName=getEl('upload-bank-select').options[getEl('upload-bank-select').selectedIndex].text||bankId;
+    const defaultRates={JPY:0.0079,USD:(parseFloat(S.usdSgd)||1.34)};
+    const fx=parseFloat(parsed.fxRate)||defaultRates[currency]||1;
+    const rec={
+      accountId:bankId,
+      accountName,
+      currency,
+      balance:parseFloat(parsed.closingBalance)||0,
+      sgdEquivalent:(parseFloat(parsed.closingBalance)||0)*fx,
+      rate:fx,
+      asOf:monthName+' '+year,
+    };
+    const idx=S.forexHoldings.findIndex(h=>h.currency===currency&&h.accountId===bankId);
+    if(idx>=0)S.forexHoldings[idx]=rec;else S.forexHoldings.push(rec);
+  }
   // Add transactions (avoid duplicates)
   const existingDescs=new Set(TRANSACTIONS.map(t=>t.date+'|'+t.desc+'|'+t.amount));
   const newTxs=(parsed.transactions||[]).filter(t=>{
@@ -358,7 +376,10 @@ function applyParsedStatement(parsed,bankId,monthName,year){
     const tx={id,date:t.date||('1 '+monthName),month:monthName+' '+year,desc:t.desc,source:t.source||getEl('upload-bank-select').options[getEl('upload-bank-select').selectedIndex].text,type:t.type||'expense',amount:parseFloat(t.amount)||0,defaultCat:cat,category:S.catOverrides[id]||cat};
     TRANSACTIONS.push(tx);added++;
   });
-  if(updated||added>0){saveS();renderNW();calcSummary();}
+  if(updated||added>0){
+    saveS();renderNW();calcSummary();
+    renderTxCurrencyCards();renderTxCurrencyTabs();
+  }
   const msg='Done! Balance updated to $'+fmt(parsed.closingBalance||0)+'. '+added+' new transactions added.';
   showUploadStatus('success',msg);
   showToast(msg,5000);
@@ -480,6 +501,7 @@ if(S.incomeUntaggedOnly===undefined)S.incomeUntaggedOnly=false;
 if(S.includeCPFinNW===undefined)S.includeCPFinNW=true;
 if(!S.pricesTs)S.pricesTs=null;
 if(!S.cpfTransactions)S.cpfTransactions=[];
+if(!S.forexHoldings)S.forexHoldings=[];
 if(!S.sectionPrefs)S.sectionPrefs={};
 ['bank','invest','cpf','other','liab'].forEach(k=>{
   if(!S.sectionPrefs[k])S.sectionPrefs[k]={include:true,hide:false};
@@ -647,7 +669,9 @@ function init(){
   applyTheme();renderProfileTabs();renderProfileSwitcher();renderSettingsAccounts();renderCatSettings();calcSummary();renderBudgets();
   rebuildMonthlyChart();
   try{renderNW();}catch(e){console.warn('renderNW:',e);}
+  renderTxCurrencyCards();renderTxCurrencyTabs();
   filterTx();populateCatFilter();
+  setCurrency('SGD',document.querySelector('.currency-tab[data-currency="SGD"]'));
   const self=(S.profiles||[]).find(p=>p.relation==='Self');
   const cpfInput=getEl('cpf-salary');
   if(cpfInput&&self&&self.salary)cpfInput.value=self.salary;
@@ -1555,7 +1579,40 @@ function changeCat(sel){
   if(sel.value==='+ New Category'){pendingCatTxId=parseInt(sel.dataset.id);getEl('cat-modal').classList.add('open');sel.value=TRANSACTIONS[parseInt(sel.dataset.id)].category;return;}
   const id=parseInt(sel.dataset.id);TRANSACTIONS[id].category=sel.value;S.catOverrides[id]=sel.value;saveS();calcSummary();filterTx();populateCatFilter();showToast('Category saved');
 }
-function setCurrency(cur,btn){document.querySelectorAll('.currency-tab').forEach(b=>b.classList.remove('active'));btn.classList.add('active');getEl('tx-sgd-card').style.display=cur==='SGD'?'':'none';getEl('tx-jpy-card').style.display=cur==='JPY'?'':'none';}
+function renderTxCurrencyTabs(){
+  const tabs=getEl('tx-currency-tabs');if(!tabs)return;
+  const currencies=[...new Set(['SGD',...(S.forexHoldings||[]).map(h=>h.currency)])];
+  tabs.innerHTML=currencies.map((c,i)=>
+    '<button class="currency-tab'+(i===0?' active':'')+'" data-currency="'+c+'" onclick="setCurrency(\''+c+'\',this)">'+c+'</button>'
+  ).join('');
+}
+function renderTxCurrencyCards(){
+  const wrap=getEl('tx-foreign-cards');if(!wrap)return;
+  const groups={};
+  (S.forexHoldings||[]).forEach(h=>{
+    if(!groups[h.currency])groups[h.currency]=[];
+    groups[h.currency].push(h);
+  });
+  wrap.innerHTML=Object.keys(groups).map(cur=>{
+    const rows=groups[cur].map(h=>'<tr>'+
+      '<td class="fw6">'+h.accountName+'</td>'+
+      '<td class="mono fw6">'+fmt(h.balance)+'</td>'+
+      '<td class="mono text-green fw6">~$'+fmt(h.sgdEquivalent)+'</td>'+
+      '<td class="mono text-muted">'+(h.rate||0).toFixed(4)+'</td>'+
+      '<td class="text-muted">'+(h.asOf||'—')+'</td>'+
+    '</tr>').join('');
+    return '<div class="card tx-currency-card" data-currency="'+cur+'" style="display:none;margin-top:16px">'+
+      '<div class="card-header"><div class="card-title">'+cur+' Holdings</div></div>'+
+      '<div class="card-body"><table class="tbl"><thead><tr><th>Account</th><th>Balance ('+cur+')</th><th>SGD Equiv.</th><th>Rate</th><th>As Of</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  }).join('');
+}
+function setCurrency(cur,btn){
+  document.querySelectorAll('.currency-tab').forEach(b=>b.classList.remove('active'));
+  if(btn)btn.classList.add('active');
+  document.querySelectorAll('.tx-currency-card').forEach(card=>{
+    card.style.display=(card.dataset.currency===cur)?'':'none';
+  });
+}
 function closeCatModal(){getEl('cat-modal').classList.remove('open');getEl('new-cat-input').value='';pendingCatTxId=null;}
 function addNewCategory(){const val=getEl('new-cat-input').value.trim();if(!val)return;if(!S.categories.includes(val))S.categories.push(val);if(pendingCatTxId!==null){TRANSACTIONS[pendingCatTxId].category=val;S.catOverrides[pendingCatTxId]=val;saveS();calcSummary();filterTx();populateCatFilter();showToast('Category added');}closeCatModal();}
 getEl('new-cat-input').addEventListener('keydown',e=>{if(e.key==='Enter')addNewCategory();if(e.key==='Escape')closeCatModal();});
