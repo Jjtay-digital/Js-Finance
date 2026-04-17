@@ -44,6 +44,16 @@ function newUuid() {
   return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`
 }
 
+function maybeIntId(value: any) {
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value)
+  if (typeof value === 'string' && value.trim() !== '' && /^-?\d+$/.test(value.trim())) {
+    const n = Number(value)
+    if (!Number.isSafeInteger(n)) return null
+    return n
+  }
+  return null
+}
+
 function rewriteNonUuidIds(items: any[] | undefined, label: string) {
   if (!items?.length) return
   const map = new Map<string, string>()
@@ -214,12 +224,9 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
   console.log('POST saving: assets=', S.assets?.length, 'liabilities=', S.liabilities?.length, 'categories=', S.categories?.length)
 
-  // Some Supabase schemas use UUID primary keys. The dashboard historically used string ids
-  // like "hdb-loan" / "asset_<timestamp>" which will fail inserts. Rewrite only non-UUID ids.
-  rewriteNonUuidIds(S.assets, 'assets')
+  // Liabilities historically used string ids like "hdb-loan". If the DB uses UUID PKs, rewrite.
   rewriteNonUuidIds(S.liabilities, 'liabilities')
-  rewriteNonUuidIds(S.cpfTransactions, 'cpf_transactions')
-  rewriteNonUuidIds(S.transactions, 'transactions')
+  // Transactions in this app use integer ids aligned with in-memory indices. Do NOT UUID-rewrite them.
 
   const fail = (stage: string, err: any) => {
     const msg = err?.message || String(err || 'Unknown error')
@@ -260,15 +267,20 @@ export async function POST(request: NextRequest) {
   const { error: delErr } = await supabase.from('assets').delete().eq('user_id', userId)
   if (delErr) return fail('assets.delete', delErr)
   if (S.assets?.length) {
-    const { error: insErr } = await supabase.from('assets').insert(S.assets.map((a: any) => ({
-      id: a.id, user_id: userId, type: a.type, name: a.name, owner: a.owner,
-      value: a.value || 0, ticker: a.ticker, market: a.market,
-      shares: a.shares, cost: a.cost, current_price: a.currentPrice,
-      cpf_oa: a.cpfOA || 0, cpf_sa: a.cpfSA || 0, cpf_ma: a.cpfMA || 0,
-      subtype: a.subtype, my_share: a.myShare,
-      include_in_nw: a.includeInNW !== false,
-      desc_text: a.desc, locked: a.locked || false, updated_at: now,
-    })))
+    const { error: insErr } = await supabase.from('assets').insert(S.assets.map((a: any) => {
+      const row: any = {
+        user_id: userId, type: a.type, name: a.name, owner: a.owner,
+        value: a.value || 0, ticker: a.ticker, market: a.market,
+        shares: a.shares, cost: a.cost, current_price: a.currentPrice,
+        cpf_oa: a.cpfOA || 0, cpf_sa: a.cpfSA || 0, cpf_ma: a.cpfMA || 0,
+        subtype: a.subtype, my_share: a.myShare,
+        include_in_nw: a.includeInNW !== false,
+        desc_text: a.desc, locked: a.locked || false, updated_at: now,
+      }
+      const id = a?.id
+      if (isUuid(id) || maybeIntId(id) != null) row.id = id
+      return row
+    }))
     if (insErr) return fail('assets.insert', insErr)
   }
 
@@ -299,22 +311,30 @@ export async function POST(request: NextRequest) {
           .filter((name: string) => name.length > 0)
       )
     )
-    const { error: catInsErr } = await supabase.from('categories').insert(
-      cleanedCategories.map((name: string) => ({ user_id: userId, name }))
+    const { error: catUpsertErr } = await supabase.from('categories').upsert(
+      cleanedCategories.map((name: string) => ({ user_id: userId, name })),
+      { onConflict: 'user_id,name', ignoreDuplicates: true }
     )
-    if (catInsErr) return fail('categories.insert', catInsErr)
+    if (catUpsertErr) return fail('categories.upsert', catUpsertErr)
   }
 
   // Save cat overrides
   const { error: ovDelErr } = await supabase.from('cat_overrides').delete().eq('user_id', userId)
   if (ovDelErr) return fail('cat_overrides.delete', ovDelErr)
   if (S.catOverrides && Object.keys(S.catOverrides).length) {
-    const { error: ovInsErr } = await supabase.from('cat_overrides').insert(
-      Object.entries(S.catOverrides).map(([txId, cat]) => ({
-        user_id: userId, tx_id: parseInt(txId), category: String(cat ?? '')
-      }))
-    )
-    if (ovInsErr) return fail('cat_overrides.insert', ovInsErr)
+    const rows = Object.entries(S.catOverrides)
+      .map(([txId, cat]) => {
+        const tx_id = parseInt(txId, 10)
+        if (!Number.isFinite(tx_id)) return null
+        return { user_id: userId, tx_id, category: String(cat ?? '') }
+      })
+      .filter(Boolean) as any[]
+
+    const { error: ovUpsertErr } = await supabase.from('cat_overrides').upsert(rows, {
+      onConflict: 'user_id,tx_id',
+      ignoreDuplicates: true,
+    })
+    if (ovUpsertErr) return fail('cat_overrides.upsert', ovUpsertErr)
   }
 
   // Save budgets
@@ -334,11 +354,16 @@ export async function POST(request: NextRequest) {
   if (cpfDelErr) return fail('cpf_transactions.delete', cpfDelErr)
   if (S.cpfTransactions?.length) {
     const { error: cpfInsErr } = await supabase.from('cpf_transactions').insert(
-      S.cpfTransactions.map((t: any) => ({
-        id: t.id, user_id: userId, date: t.date, description: t.desc,
-        amount: t.amount, account: t.account, type: t.type,
-        detail: t.detail, editable: t.editable,
-      }))
+      S.cpfTransactions.map((t: any) => {
+        const row: any = {
+          user_id: userId, date: t.date, description: t.desc,
+          amount: t.amount, account: t.account, type: t.type,
+          detail: t.detail, editable: t.editable,
+        }
+        const id = t?.id
+        if (isUuid(id) || maybeIntId(id) != null) row.id = id
+        return row
+      })
     )
     if (cpfInsErr) return fail('cpf_transactions.insert', cpfInsErr)
   }
@@ -348,18 +373,22 @@ export async function POST(request: NextRequest) {
   if (txDelErr) return fail('transactions.delete', txDelErr)
   if (S.transactions?.length) {
     const { error: txErr } = await supabase.from('transactions').insert(
-      S.transactions.map((t: any) => ({
-        id: t.id,
-        user_id: userId,
-        date: t.date,
-        month: t.month,
-        description: t.desc,
-        source: t.source,
-        type: t.type,
-        amount: t.amount || 0,
-        default_cat: t.defaultCat,
-        category: t.category,
-      }))
+      S.transactions.map((t: any) => {
+        const row: any = {
+          user_id: userId,
+          date: t.date,
+          month: t.month,
+          description: t.desc,
+          source: t.source,
+          type: t.type,
+          amount: t.amount || 0,
+          default_cat: t.defaultCat,
+          category: t.category,
+        }
+        const id = maybeIntId(t?.id)
+        if (id != null) row.id = id
+        return row
+      })
     )
     if (txErr) return fail('transactions.insert', txErr)
   }
