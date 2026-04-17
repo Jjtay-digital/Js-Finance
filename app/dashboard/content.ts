@@ -452,6 +452,7 @@ export const DASHBOARD_BODY = `<div id="app">
         <input type="password" class="api-key-input" id="api-key-input" placeholder="sk-ant-api03-...">
         <button class="btn primary" onclick="saveApiKey()">Save Key</button>
         <button class="btn" onclick="testApiKey()">Test</button>
+        <button class="btn danger" onclick="clearApiKey()">Clear Key</button>
       </div>
       <div class="setting-row" style="margin-top:10px">
         <div>

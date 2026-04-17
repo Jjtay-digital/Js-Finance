@@ -672,10 +672,26 @@ function loadApiKeyDisplay() {
 }
 function saveApiKey() {
   const k = (getEl('api-key-input').value || '').trim();
-  if (!k && S.shareApiKey) S.shareApiKey = false;
-  S.apiKey = k; saveS();
+  if (!k) {
+    showToast('Key field is empty. Use Clear Key if you want to remove it.');
+    const el=getEl('api-key-input');
+    if(el && S.apiKey) el.value=S.apiKey;
+    return;
+  }
+  S.apiKey = k;
+  saveS();
   syncShareApiUI();
-  showToast(k ? 'API key saved' : 'API key cleared');
+  showToast('API key saved');
+}
+function clearApiKey(){
+  if(!confirm('Clear saved API key? Family sharing will be turned off.'))return;
+  S.apiKey='';
+  S.shareApiKey=false;
+  saveS();
+  const el=getEl('api-key-input');
+  if(el)el.value='';
+  syncShareApiUI();
+  showToast('API key cleared');
 }
 function syncShareApiUI(){
   const on=!!S.shareApiKey;
