@@ -30,6 +30,38 @@ function getAdminSupabase() {
   return createClient(url, key, { auth: { persistSession: false } })
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isUuid(value: any) {
+  return typeof value === 'string' && UUID_RE.test(value)
+}
+
+function newUuid() {
+  const c: any = globalThis as any
+  if (c?.crypto?.randomUUID) return c.crypto.randomUUID() as string
+  // Rare fallback (shouldn't happen on modern Node runtimes used by Vercel)
+  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`
+}
+
+function rewriteNonUuidIds(items: any[] | undefined, label: string) {
+  if (!items?.length) return
+  const map = new Map<string, string>()
+  for (const row of items) {
+    const oldId = row?.id
+    if (oldId == null) continue
+    const oldKey = String(oldId)
+    if (isUuid(oldKey)) continue
+    let next = map.get(oldKey)
+    if (!next) {
+      next = newUuid()
+      map.set(oldKey, next)
+      console.warn(`POST /api/data: rewrote non-uuid ${label} id "${oldKey}" -> "${next}"`)
+    }
+    row.id = next
+  }
+}
+
 // GET — load all user data
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -182,14 +214,23 @@ export async function POST(request: NextRequest) {
   const now = new Date().toISOString()
   console.log('POST saving: assets=', S.assets?.length, 'liabilities=', S.liabilities?.length, 'categories=', S.categories?.length)
 
+  // Some Supabase schemas use UUID primary keys. The dashboard historically used string ids
+  // like "hdb-loan" / "asset_<timestamp>" which will fail inserts. Rewrite only non-UUID ids.
+  rewriteNonUuidIds(S.assets, 'assets')
+  rewriteNonUuidIds(S.liabilities, 'liabilities')
+  rewriteNonUuidIds(S.cpfTransactions, 'cpf_transactions')
+  rewriteNonUuidIds(S.transactions, 'transactions')
+
   const fail = (stage: string, err: any) => {
     const msg = err?.message || String(err || 'Unknown error')
     const code = err?.code
     const hint = err?.hint
-    console.error(`POST /api/data failed at ${stage}:`, msg, code ? `code=${code}` : '', hint ? `hint=${hint}` : '')
+    const details = err?.details
+    console.error(`POST /api/data failed at ${stage}:`, msg, code ? `code=${code}` : '', details ? `details=${details}` : '', hint ? `hint=${hint}` : '')
     return NextResponse.json({
       error: `Save failed at ${stage}`,
       details: msg,
+      pgDetails: details,
       code,
       hint,
       usingServiceRole: !!admin,
@@ -237,8 +278,11 @@ export async function POST(request: NextRequest) {
   if (S.liabilities?.length) {
     const { error: liabInsErr } = await supabase.from('liabilities').insert(S.liabilities.map((l: any) => ({
       id: l.id, user_id: userId, name: l.name, type: l.type,
-      amount: l.amount, full_amount: l.fullAmount, my_share: l.myShare,
-      freq: l.freq, owner: l.owner, notes: l.notes, debit: l.debit,
+      amount: parseFloat(l.amount) || 0,
+      full_amount: l.fullAmount == null ? null : parseFloat(l.fullAmount),
+      my_share: l.myShare == null ? null : parseFloat(l.myShare),
+      freq: l.freq, owner: l.owner, notes: l.notes,
+      debit: (l.debit == null || String(l.debit).trim() === '') ? null : String(l.debit).trim(),
       updated_at: now,
     })))
     if (liabInsErr) return fail('liabilities.insert', liabInsErr)

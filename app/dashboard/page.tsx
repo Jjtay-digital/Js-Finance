@@ -79,7 +79,9 @@ function DashboardApp({ user }: { user: any }) {
           }).then(async (res) => {
             if (res.ok) return
             const err = await res.json().catch(() => ({} as any))
-            const msg = err?.error || `Save failed (${res.status})`
+            const base = err?.error || `Save failed (${res.status})`
+            const extra = err?.details || err?.pgDetails || err?.hint || err?.code
+            const msg = extra ? `${base}: ${extra}` : base
             if (Date.now() - (w.__lastSaveWarnTs || 0) > 5000) {
               if (typeof w.showToast === 'function') w.showToast(msg, 4000)
               w.__lastSaveWarnTs = Date.now()
