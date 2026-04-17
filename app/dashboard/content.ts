@@ -349,9 +349,9 @@ export const DASHBOARD_BODY = `<div id="app">
   <div class="card mb24">
     <div class="card-header"><div><div class="card-title">CPF Contribution Calculator</div><div class="card-subtitle">Born Oct 1992 &middot; Age 33 &middot; Jan 2026 rates</div></div></div>
     <div class="card-body">
-      <div class="info-box">SG median ~$5,500 is <strong>gross income</strong>. Your $4,000 take-home means gross ~$5,000.</div>
+      <div class="info-box">Enter your gross monthly salary to auto-calculate CPF and update peer comparison.</div>
       <div class="cpf-row">
-        <div><label class="cpf-label">Gross Monthly Salary</label><input class="cpf-field" type="number" id="cpf-salary" value="5000" oninput="calcCPF()"></div>
+        <div><label class="cpf-label">Gross Monthly Salary</label><input class="cpf-field" type="number" id="cpf-salary" value="" placeholder="Enter salary" oninput="calcCPF()"></div>
         <div><label class="cpf-label">Status</label><select class="form-select cpf-field" id="cpf-status" onchange="calcCPF()"><option value="sc">Singapore Citizen</option><option value="pr">PR (3rd year+)</option></select></div>
       </div>
       <div class="cpf-result-grid" id="cpf-results"></div>
@@ -369,9 +369,9 @@ export const DASHBOARD_BODY = `<div id="app">
     </div>
     <div class="card-body">
       <div class="compare-grid" id="peer-grid">
-        <div class="compare-card"><div class="compare-label">Gross Monthly Salary</div><div class="compare-row"><span class="compare-who">You (est. gross)</span><span class="compare-val text-green" id="peer-my-salary">~$5,000</span></div><div class="compare-row"><span class="compare-who">SG median age <span id="peer-age">33</span></span><span class="compare-val text-muted" id="peer-sg-salary">~$5,500</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-salary-bar" style="background:var(--green)"></div></div><p id="peer-salary-note" style="font-size:12px;color:var(--text3);margin-top:8px;font-weight:500"></p></div>
-        <div class="compare-card"><div class="compare-label">Liquid Savings</div><div class="compare-row"><span class="compare-who">You (tracked)</span><span class="compare-val text-accent" id="compare-liquid">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span class="peer-age-ref">33</span></span><span class="compare-val text-muted" id="peer-sg-savings">~$30,000</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="compare-liquid-bar" style="width:5%;background:var(--accent)"></div></div></div>
-        <div class="compare-card"><div class="compare-label">HDB Loan Balance</div><div class="compare-row"><span class="compare-who">You (joint w/ Sally)</span><span class="compare-val text-red" id="peer-my-loan">$342,589</span></div><div class="compare-row"><span class="compare-who">SG median</span><span class="compare-val text-muted" id="peer-sg-loan">~$280,000</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-loan-bar" style="background:var(--red)"></div></div></div>
+        <div class="compare-card"><div class="compare-label">Gross Monthly Salary</div><div class="compare-row"><span class="compare-who">You (from profile)</span><span class="compare-val text-green" id="peer-my-salary">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span id="peer-age">33</span></span><span class="compare-val text-muted" id="peer-sg-salary">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-salary-bar" style="background:var(--green)"></div></div><p id="peer-salary-note" style="font-size:12px;color:var(--text3);margin-top:8px;font-weight:500"></p></div>
+        <div class="compare-card"><div class="compare-label">Liquid Savings</div><div class="compare-row"><span class="compare-who">You (tracked)</span><span class="compare-val text-accent" id="compare-liquid">—</span></div><div class="compare-row"><span class="compare-who">SG median age <span class="peer-age-ref">33</span></span><span class="compare-val text-muted" id="peer-sg-savings">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="compare-liquid-bar" style="width:5%;background:var(--accent)"></div></div></div>
+        <div class="compare-card"><div class="compare-label">Housing Loan Balance</div><div class="compare-row"><span class="compare-who">You (from liabilities)</span><span class="compare-val text-red" id="peer-my-loan">—</span></div><div class="compare-row"><span class="compare-who">SG median</span><span class="compare-val text-muted" id="peer-sg-loan">—</span></div><div class="compare-bar-wrap"><div class="compare-bar" id="peer-loan-bar" style="background:var(--red)"></div></div></div>
       </div>
     </div>
   </div>

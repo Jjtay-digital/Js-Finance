@@ -490,10 +490,16 @@ if(!S.hidePages)S.hidePages={monthly:false,transactions:false,networth:false};
 if(S.hidePages.monthly===undefined)S.hidePages.monthly=false;
 if(S.hidePages.transactions===undefined)S.hidePages.transactions=false;
 if(S.hidePages.networth===undefined)S.hidePages.networth=false;
-if(!S.profiles){
-  const selfName=(window._userName||'You').toString();
-  const selfEmail=(window._userEmail||'').toString();
+const selfName=(window._userName||window._userEmail||'You').toString();
+const selfEmail=(window._userEmail||'').toString();
+if(!S.profiles||!Array.isArray(S.profiles)||!S.profiles.length){
   S.profiles=[{id:'self',name:selfName,relation:'Self',dob:'',citizen:'sc',salary:'',employer:'',email:selfEmail}];
+}else{
+  // Keep identity aligned to currently signed-in user.
+  S.profiles[0].id='self';
+  S.profiles[0].relation='Self';
+  S.profiles[0].name=selfName;
+  S.profiles[0].email=selfEmail;
 }
 if(!S.assets)S.assets=[];
 if(!S.liabilities)S.liabilities=[];
@@ -642,6 +648,9 @@ function init(){
   rebuildMonthlyChart();
   try{renderNW();}catch(e){console.warn('renderNW:',e);}
   filterTx();populateCatFilter();
+  const self=(S.profiles||[]).find(p=>p.relation==='Self');
+  const cpfInput=getEl('cpf-salary');
+  if(cpfInput&&self&&self.salary)cpfInput.value=self.salary;
   try{calcCPF();}catch(e){}
   try{applyCPFAutoCredit();}catch(e){console.warn('CPF:',e);}
   loadApiKeyDisplay();
@@ -867,7 +876,7 @@ function updateNWTotals(){
     const rem=parseFloat(hdbL.fullAmount)||342589.47;
     const mLeft=rem>0?Math.ceil(rem/820.15):0;
     const yrs=Math.floor(mLeft/12),mths=mLeft%12;
-    noteEl.textContent='Jason pays $820.15/month from CPF OA. Full outstanding: $'+fmt(rem)+'. Est. months left (Jason only): ~'+(yrs>0?yrs+'y ':'')+mths+'m. Sally tracked in Phase 2.';
+    noteEl.textContent='Estimated outstanding: $'+fmt(rem)+'. At $820.15/mth repayment, approx. '+(yrs>0?yrs+'y ':'')+mths+'m remaining.';
   }
 }
 
@@ -1247,9 +1256,9 @@ function calcAge(){
 
 function renderPeerComparison(){
   const age=calcAge();
-  const salary=parseFloat((S.profiles.find(p=>p.relation==='Self')||{}).salary)||5000;
-  const hdbL=S.liabilities.find(l=>l.id==='hdb-loan');
-  const hdbBalance=hdbL?parseFloat(hdbL.fullAmount)||342589.47:342589.47;
+  const salary=parseFloat((S.profiles.find(p=>p.relation==='Self')||{}).salary)||0;
+  const housingLiab=S.liabilities.find(l=>(l.type||'').toLowerCase().includes('housing'));
+  const hdbBalance=housingLiab?(parseFloat(housingLiab.fullAmount)||parseFloat(housingLiab.amount)||0):0;
   const liquid=S.assets.filter(a=>a.type==='bank').reduce((s,a)=>s+assetVal(a),0);
 
   // Use cached peer data or defaults
@@ -1260,16 +1269,21 @@ function renderPeerComparison(){
   const ageEl=getEl('peer-age');if(ageEl)ageEl.textContent=age;
 
   // Salary card
-  setEl('peer-my-salary','~$'+fmtN(salary));
+  setEl('peer-my-salary',salary>0?'~$'+fmtN(salary):'—');
   setEl('peer-sg-salary','~$'+fmtN(peer.sgSalary));
-  const salaryPct=Math.min(salary/peer.sgSalary*100,130).toFixed(0);
+  const salaryPct=salary>0?Math.min(salary/peer.sgSalary*100,130).toFixed(0):0;
   const salaryBar=getEl('peer-salary-bar');
   if(salaryBar){salaryBar.style.width=Math.min(salaryPct,100)+'%';salaryBar.style.background=salary>=peer.sgSalary?'var(--green)':'var(--amber)';}
   const salaryNote=getEl('peer-salary-note');
   if(salaryNote){
-    const diff=salary-peer.sgSalary;
-    salaryNote.textContent=diff>=0?'Above median by $'+fmtN(diff)+'/mth':'Below median by $'+fmtN(Math.abs(diff))+'/mth. Note: claims from SHA2 Labs may push this higher.';
-    salaryNote.style.color=diff>=0?'var(--green)':'var(--amber)';
+    if(salary<=0){
+      salaryNote.textContent='Enter gross monthly salary above or in Settings to compare with SG median.';
+      salaryNote.style.color='var(--text3)';
+    }else{
+      const diff=salary-peer.sgSalary;
+      salaryNote.textContent=diff>=0?'Above median by $'+fmtN(diff)+'/mth':'Below median by $'+fmtN(Math.abs(diff))+'/mth.';
+      salaryNote.style.color=diff>=0?'var(--green)':'var(--amber)';
+    }
   }
 
   // Savings card
@@ -1279,11 +1293,11 @@ function renderPeerComparison(){
   setEl('peer-sg-savings','~$'+fmtN(peer.sgSavings));
 
   // HDB card
-  setEl('peer-my-loan','$'+fmtN(hdbBalance));
+  setEl('peer-my-loan',hdbBalance>0?'$'+fmtN(hdbBalance):'—');
   setEl('peer-sg-loan','~$'+fmtN(peer.sgLoan));
-  const loanPct=Math.min(hdbBalance/peer.sgLoan*100,130).toFixed(0);
+  const loanPct=hdbBalance>0?Math.min(hdbBalance/peer.sgLoan*100,130).toFixed(0):0;
   const loanBar=getEl('peer-loan-bar');
-  if(loanBar){loanBar.style.width=Math.min(loanPct,100)+'%';loanBar.style.background=hdbBalance<=peer.sgLoan?'var(--green)':'var(--red)';}
+  if(loanBar){loanBar.style.width=Math.min(loanPct,100)+'%';loanBar.style.background=hdbBalance>0&&(hdbBalance<=peer.sgLoan)?'var(--green)':'var(--red)';}
 
   // Last updated
   const updEl=getEl('peer-last-upd');
@@ -1361,6 +1375,12 @@ async function refreshPeerData(){
 // ── CPF CALC ──// ── CPF CALC ──────────────────────────────────────────────────────────────────
 function calcCPF(){
   const gross=parseFloat(getEl('cpf-salary').value)||0;
+  const self=(S.profiles||[]).find(p=>p.relation==='Self');
+  if(self){
+    self.salary=gross>0?String(gross):'';
+    saveS();
+    renderPeerComparison();
+  }
   const capped=Math.min(gross,8000);
   const emp=Math.floor(capped*.20),er=Math.floor(capped*.17),total=emp+er;
   const oa=Math.floor(total*23/37),sa=Math.floor(total*6/37),ma=total-oa-sa;
@@ -1533,7 +1553,19 @@ function renderProfileTabs(){
   }).join('');
 }
 function switchPTab(i,btn){document.querySelectorAll('.profile-tab-btn').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.profile-panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');getEl('pp-'+i).classList.add('active');}
-function updP(el){const i=parseInt(el.dataset.pi),k=el.dataset.pk,v=el.value;S.profiles[i][k]=v;saveS();}
+function updP(el){
+  const i=parseInt(el.dataset.pi),k=el.dataset.pk,v=el.value;
+  S.profiles[i][k]=v;saveS();
+  if(S.profiles[i]&&S.profiles[i].relation==='Self'&&k==='salary'){
+    const cpfInput=getEl('cpf-salary');
+    if(cpfInput){
+      cpfInput.value=v||'';
+      calcCPF();
+    }else{
+      renderPeerComparison();
+    }
+  }
+}
 function openAddProfileModal(){getEl('pm-name').value='';getEl('pm-dob').value='';getEl('profile-modal').classList.add('open');}
 function closeProfileModal(){getEl('profile-modal').classList.remove('open');}
 function saveNewProfile(){const name=getEl('pm-name').value.trim();if(!name){showToast('Enter a name');return;}S.profiles.push({id:'m_'+Date.now(),name,relation:getEl('pm-relation').value,dob:getEl('pm-dob').value,citizen:getEl('pm-citizen').value,salary:'',employer:'',email:''});saveS();closeProfileModal();renderProfileTabs();showToast(name+' added');}
