@@ -16,6 +16,31 @@ async function getSupabase() {
   )
 }
 
+async function findUserByEmail(supabase: any, rawEmail: string) {
+  const email = String(rawEmail || '').trim()
+  if (!email) return null
+  const normalized = email.toLowerCase()
+
+  // Try exact normalized match first.
+  let { data } = await supabase
+    .from('user_roles')
+    .select('user_id, full_name, email')
+    .eq('email', normalized)
+    .maybeSingle()
+
+  if (data) return data
+
+  // Fallback to case-insensitive lookup for legacy rows.
+  const fallback = await supabase
+    .from('user_roles')
+    .select('user_id, full_name, email')
+    .ilike('email', normalized)
+    .limit(1)
+    .maybeSingle()
+
+  return fallback.data || null
+}
+
 // GET - get my family groups + pending invites + member data for combined view
 export async function GET(request: NextRequest) {
   const supabase = await getSupabase()
@@ -133,13 +158,13 @@ export async function POST(request: NextRequest) {
   if (action === 'invite') {
     // Invite someone by email
     const { groupId, email } = body
-    
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (!groupId || !normalizedEmail) {
+      return NextResponse.json({ error: 'Group and email are required' }, { status: 400 })
+    }
+
     // Find user by email in user_roles
-    const { data: invitee } = await supabase
-      .from('user_roles')
-      .select('user_id')
-      .eq('email', email)
-      .single()
+    const invitee = await findUserByEmail(supabase, normalizedEmail)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign up first.' }, { status: 404 })
@@ -177,11 +202,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cannot add yourself' }, { status: 400 })
     }
 
-    const { data: invitee } = await supabase
-      .from('user_roles')
-      .select('user_id, full_name, email')
-      .eq('email', email)
-      .single()
+    const invitee = await findUserByEmail(supabase, email)
 
     if (!invitee) {
       return NextResponse.json({ error: 'User not found. They need to sign in first.' }, { status: 404 })

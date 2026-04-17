@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     account: t.account, type: t.type, detail: t.detail, editable: t.editable,
   }))
 
-  // If user is in a family group, check if group owner shares their key
+  // If user is in a family group, check if family owner shares their key
   let sharedApiKey = null
   let sharedAlphaKey = null
   try {
@@ -93,20 +93,24 @@ export async function GET(request: NextRequest) {
       .eq('status', 'accepted')
 
     if (memberships?.length) {
-      // Get group owner's settings if they share their key
       const groupIds = memberships.map((m: any) => m.group_id)
-      const { data: groupData } = await supabase
-        .from('family_groups')
-        .select('created_by')
-        .in('id', groupIds)
-      
-      for (const group of (groupData || [])) {
-        if (group.created_by === userId) continue // Skip if they ARE the owner
+
+      // Source of truth for owner is membership role, not only family_groups.created_by.
+      const { data: ownerMemberships } = await supabase
+        .from('family_group_members')
+        .select('group_id, user_id')
+        .in('group_id', groupIds)
+        .eq('role', 'owner')
+        .eq('status', 'accepted')
+
+      for (const owner of (ownerMemberships || [])) {
+        if (owner.user_id === userId) continue
         const { data: ownerSettings } = await supabase
           .from('settings')
           .select('api_key, share_api_key, alpha_vantage_key')
-          .eq('user_id', group.created_by)
-          .single()
+          .eq('user_id', owner.user_id)
+          .maybeSingle()
+
         if (ownerSettings?.share_api_key) {
           sharedApiKey = ownerSettings.api_key
           sharedAlphaKey = ownerSettings.alpha_vantage_key
