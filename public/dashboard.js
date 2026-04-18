@@ -746,7 +746,7 @@ function init(){
   if(statusSel&&self&&self.citizen)statusSel.value=self.citizen;
   try{calcCPF();}catch(e){}
   loadCPFRates().then(()=>calcCPF());
-  try{applyCPFAutoCredit();}catch(e){console.warn('CPF:',e);}
+  // CPF monthly auto-credit runs in __runPostHydrationCPF after Supabase load (avoids duplicate rows).
   loadApiKeyDisplay();
   syncHideButtons();
   const tab=document.querySelector('.nav-tab[data-page="'+S.activePage+'"]');
@@ -1122,9 +1122,85 @@ function updateNWTotals(){
 }
 
 // ── CPF AUTO-CREDIT ───────────────────────────────────────────────────────────
+/** True if monthly auto block for this calendar month is already in the log (from DB or prior apply). */
+function cpfAutoAlreadyAppliedForMonth(year, month) {
+  const mn = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month]
+  const marker = 'HDB Loan Reduced (' + mn + ' ' + year + ')'
+  return (S.cpfTransactions || []).some(t => t && t.desc === marker)
+}
+
+/** Remove duplicate rows (same date+description) — fixes bad saves / double applies. */
+function dedupeCpfTransactions() {
+  const list = S.cpfTransactions
+  if (!Array.isArray(list) || !list.length) return false
+  const seen = new Set()
+  const out = []
+  for (const t of list) {
+    if (!t) continue
+    const k = String(t.date || '') + '|' + String(t.desc || '')
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(t)
+  }
+  if (out.length === list.length) return false
+  S.cpfTransactions = out
+  return true
+}
+
+function dedupeById(arr) {
+  if (!Array.isArray(arr) || !arr.length) return false
+  const seen = new Set()
+  const out = []
+  for (const row of arr) {
+    if (!row) continue
+    if (row.id == null) { out.push(row); continue }
+    const k = String(row.id)
+    if (seen.has(k)) continue
+    seen.add(k)
+    out.push(row)
+  }
+  if (out.length === arr.length) return false
+  return out
+}
+
+function dedupeTransactionsArray() {
+  const tx = window.TRANSACTIONS
+  if (!Array.isArray(tx) || !tx.length) return false
+  const m = new Map()
+  for (const t of tx) {
+    if (!t || t.id == null) continue
+    m.set(String(t.id), t)
+  }
+  const out = Array.from(m.values())
+  if (out.length === tx.length) return false
+  window.TRANSACTIONS = out
+  S.transactions = window.TRANSACTIONS
+  return true
+}
+
+/** Run after Supabase hydration only — do not run in init() or we double-apply vs server data. */
+function runPostHydrationCPF() {
+  let changed = false
+  const da = dedupeById(S.assets)
+  if (da) { S.assets = da; changed = true }
+  const dl = dedupeById(S.liabilities)
+  if (dl) { S.liabilities = dl; changed = true }
+  if (dedupeCpfTransactions()) changed = true
+  if (dedupeTransactionsArray()) changed = true
+  if (changed) saveS()
+  try { applyCPFAutoCredit() } catch (e) { console.warn('CPF auto:', e) }
+  try { renderCPFLog() } catch (e) {}
+  try { calcSummary() } catch (e) {}
+  try { renderNW() } catch (e) {}
+}
+window.__runPostHydrationCPF = runPostHydrationCPF
+
 function applyCPFAutoCredit(){
   const now=new Date();const year=now.getFullYear(),month=now.getMonth();
-  const key='cpf_'+year+'_'+month;if(S[key]||now.getDate()<10)return;
+  const key='cpf_'+year+'_'+month;
+  if (S[key]) return
+  if (cpfAutoAlreadyAppliedForMonth(year, month)) { S[key] = true; return }
+  if (now.getDate()<10)return;
   const jason=S.profiles.find(p=>p.id==='jason'||p.relation==='Self');
   const gross=parseFloat(jason?.salary)||0;if(gross<=0)return;
   const capped=Math.min(gross,8000);
@@ -1138,7 +1214,7 @@ function applyCPFAutoCredit(){
   cpfA.cpfSA=(parseFloat(cpfA.cpfSA)||0)+sa;
   cpfA.cpfMA=(parseFloat(cpfA.cpfMA)||0)+ma;
   cpfA.cpfOA=Math.max(0,(parseFloat(cpfA.cpfOA)||0)-820.15);
-  const hdbL=S.liabilities.find(l=>l.id==='hdb-loan');
+  const hdbL=S.liabilities.find(l=>l.id==='hdb-loan'||(l.type||'').toLowerCase().includes('housing'));
   if(hdbL){const cf=parseFloat(hdbL.fullAmount)||342589.47;const nf=Math.max(0,cf-820.15);hdbL.fullAmount=parseFloat(nf.toFixed(2));hdbL.amount=parseFloat((nf*0.5).toFixed(2));hdbL.notes='Full $'+nf.toFixed(2)+' - Jason 50%: $'+hdbL.amount.toFixed(2);}
   S.cpfTransactions.push(
     {id:'emp_'+year+'_'+month,date:dateStr,desc:'CPF Employee Contribution ('+mn+' '+year+')',amount:emp,account:'CPF',type:'credit',detail:'OA +$'+oa+' SA +$'+sa+' MA +$'+ma,editable:true},

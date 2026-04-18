@@ -152,6 +152,14 @@ function DashboardApp({ user }: { user: any }) {
           // Re-enable syncing after first load attempt so user edits can save.
           // Server-side route must remain the final guard against destructive payloads.
           w.__dashboardHydrated = true
+          // Dedupe assets/liabilities/cpf/tx and run monthly CPF auto-credit only after server state is applied (see dashboard.js).
+          if (typeof w.__runPostHydrationCPF === 'function') {
+            try {
+              w.__runPostHydrationCPF()
+            } catch (e) {
+              console.warn('Post-hydration CPF/dedupe:', e)
+            }
+          }
         })
 
       // 4. Show user info
