@@ -238,6 +238,8 @@ export async function POST(request: NextRequest) {
   // Liabilities historically used string ids like "hdb-loan". If the DB uses UUID PKs, rewrite.
   rewriteNonUuidIds(S.liabilities, 'liabilities')
   if (S.liabilities?.length) S.liabilities = dedupeById(S.liabilities)
+  rewriteNonUuidIds(S.cpfTransactions, 'cpf_transactions')
+  if (S.cpfTransactions?.length) S.cpfTransactions = dedupeById(S.cpfTransactions)
   // Transactions in this app use integer ids aligned with in-memory indices. Do NOT UUID-rewrite them.
 
   const fail = (stage: string, err: any) => {
@@ -296,11 +298,12 @@ export async function POST(request: NextRequest) {
     if (insErr) return fail('assets.insert', insErr)
   }
 
-  // Save liabilities
-  const { error: liabDelErr } = await supabase.from('liabilities').delete().eq('user_id', userId)
-  if (liabDelErr) return fail('liabilities.delete', liabDelErr)
-  if (S.liabilities?.length) {
-    const { error: liabInsErr } = await supabase.from('liabilities').insert(S.liabilities.map((l: any) => ({
+  // Save liabilities — upsert then remove orphans (NOT delete-all + insert: concurrent autosaves race and cause 23505)
+  if (!S.liabilities?.length) {
+    const { error: liabDelAllErr } = await supabase.from('liabilities').delete().eq('user_id', userId)
+    if (liabDelAllErr) return fail('liabilities.delete_all', liabDelAllErr)
+  } else {
+    const liabRows = S.liabilities.map((l: any) => ({
       id: l.id, user_id: userId, name: l.name, type: l.type,
       amount: parseFloat(l.amount) || 0,
       full_amount: l.fullAmount == null ? null : parseFloat(l.fullAmount),
@@ -308,8 +311,12 @@ export async function POST(request: NextRequest) {
       freq: l.freq, owner: l.owner, notes: l.notes,
       debit: (l.debit == null || String(l.debit).trim() === '') ? null : String(l.debit).trim(),
       updated_at: now,
-    })))
-    if (liabInsErr) return fail('liabilities.insert', liabInsErr)
+    }))
+    const { error: liabUpsertErr } = await supabase.from('liabilities').upsert(liabRows, { onConflict: 'id' })
+    if (liabUpsertErr) return fail('liabilities.upsert', liabUpsertErr)
+    const keepLiabIds = liabRows.map((r: any) => r.id).filter(Boolean)
+    const { error: liabOrphanErr } = await supabase.from('liabilities').delete().eq('user_id', userId).notIn('id', keepLiabIds)
+    if (liabOrphanErr) return fail('liabilities.delete_orphans', liabOrphanErr)
   }
 
   // Save categories
@@ -361,23 +368,28 @@ export async function POST(request: NextRequest) {
     if (budgetInsErr) return fail('budgets.insert', budgetInsErr)
   }
 
-  // Save CPF transactions
-  const { error: cpfDelErr } = await supabase.from('cpf_transactions').delete().eq('user_id', userId)
-  if (cpfDelErr) return fail('cpf_transactions.delete', cpfDelErr)
-  if (S.cpfTransactions?.length) {
-    const { error: cpfInsErr } = await supabase.from('cpf_transactions').insert(
-      S.cpfTransactions.map((t: any) => {
-        const row: any = {
-          user_id: userId, date: t.date, description: t.desc,
-          amount: t.amount, account: t.account, type: t.type,
-          detail: t.detail, editable: t.editable,
-        }
-        const id = t?.id
-        if (isUuid(id) || maybeIntId(id) != null) row.id = id
-        return row
-      })
-    )
-    if (cpfInsErr) return fail('cpf_transactions.insert', cpfInsErr)
+  // Save CPF transactions — upsert + orphan delete (same race as liabilities)
+  if (!S.cpfTransactions?.length) {
+    const { error: cpfDelAllErr } = await supabase.from('cpf_transactions').delete().eq('user_id', userId)
+    if (cpfDelAllErr) return fail('cpf_transactions.delete_all', cpfDelAllErr)
+  } else {
+    const cpfRows = S.cpfTransactions.map((t: any) => {
+      const row: any = {
+        user_id: userId, date: t.date, description: t.desc,
+        amount: t.amount, account: t.account, type: t.type,
+        detail: t.detail, editable: t.editable,
+      }
+      const id = t?.id
+      if (isUuid(id) || maybeIntId(id) != null) row.id = id
+      return row
+    })
+    const { error: cpfUpsertErr } = await supabase.from('cpf_transactions').upsert(cpfRows, { onConflict: 'id' })
+    if (cpfUpsertErr) return fail('cpf_transactions.upsert', cpfUpsertErr)
+    const keepCpfIds = cpfRows.map((r: any) => r.id).filter(Boolean)
+    if (keepCpfIds.length) {
+      const { error: cpfOrphanErr } = await supabase.from('cpf_transactions').delete().eq('user_id', userId).notIn('id', keepCpfIds)
+      if (cpfOrphanErr) return fail('cpf_transactions.delete_orphans', cpfOrphanErr)
+    }
   }
 
   // Save transactions (uploaded from PDF statements)
