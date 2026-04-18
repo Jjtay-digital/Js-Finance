@@ -72,6 +72,17 @@ function rewriteNonUuidIds(items: any[] | undefined, label: string) {
   }
 }
 
+/** After UUID rewrite, multiple rows can share the same legacy id → same PK; keep last row per id. */
+function dedupeById<T extends { id?: unknown }>(items: T[] | undefined): T[] | undefined {
+  if (!items?.length) return items
+  const byId = new Map<string, T>()
+  for (const row of items) {
+    if (row?.id == null) continue
+    byId.set(String(row.id), row)
+  }
+  return Array.from(byId.values())
+}
+
 // GET — load all user data
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -226,6 +237,7 @@ export async function POST(request: NextRequest) {
 
   // Liabilities historically used string ids like "hdb-loan". If the DB uses UUID PKs, rewrite.
   rewriteNonUuidIds(S.liabilities, 'liabilities')
+  if (S.liabilities?.length) S.liabilities = dedupeById(S.liabilities)
   // Transactions in this app use integer ids aligned with in-memory indices. Do NOT UUID-rewrite them.
 
   const fail = (stage: string, err: any) => {
